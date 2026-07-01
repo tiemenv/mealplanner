@@ -104,7 +104,7 @@ export async function inviteMember(email: string): Promise<ActionResult> {
         },
         $setOnInsert: { groupId, email: clean },
       },
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: "after" }
     );
   } catch {
     return { ok: false, error: "Could not create invite." };

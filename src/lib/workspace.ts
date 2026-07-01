@@ -61,7 +61,7 @@ export async function getSession(): Promise<Session> {
       },
       $setOnInsert: { clerkId: user.id },
     },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: "after" }
   ).lean()) as UserProfileDoc;
 
   let workspace: Workspace;

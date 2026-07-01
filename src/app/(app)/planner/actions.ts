@@ -64,7 +64,7 @@ export async function generatePlan(
       },
       $setOnInsert: { ownerKey, weekStart },
     },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: "after" }
   ).lean()) as MealPlanDoc;
 
   revalidatePath("/dashboard");
@@ -93,7 +93,7 @@ async function mutatePlan(
   const doc = (await MealPlan.findOneAndUpdate(
     { ownerKey, weekStart },
     { $set: { slots: toStoredSlots(sortSlots(slots)) } },
-    { new: true }
+    { returnDocument: "after" }
   ).lean()) as MealPlanDoc;
 
   revalidatePath("/dashboard");
