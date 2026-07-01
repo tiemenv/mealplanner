@@ -1,0 +1,308 @@
+"use client";
+
+import { useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
+import { Loader2, Upload, X } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { CuisineCombobox } from "@/components/cuisine-combobox";
+import { MealTypeSelect } from "@/components/meal-type-select";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "@/components/ui/tabs";
+import type { MealView } from "@/lib/types";
+import type { Diet, MealType } from "@/lib/constants";
+import { cn } from "@/lib/utils";
+import {
+  createMeal,
+  updateMeal,
+  uploadMealImage,
+} from "@/app/(app)/library/actions";
+
+interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  meal?: MealView | null;
+  cuisines: string[];
+}
+
+const empty = {
+  name: "",
+  diet: "veg" as Diet,
+  mealTypes: [] as MealType[],
+  cuisine: "",
+  imageUrl: "",
+  ingredients: "",
+  recipe: "",
+  recipeUrl: "",
+};
+
+export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
+  const [form, setForm] = useState(() => toForm(meal));
+  const [lastMealId, setLastMealId] = useState(meal?.id ?? null);
+  const [pending, startTransition] = useTransition();
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Reset form when the dialog target changes.
+  if ((meal?.id ?? null) !== lastMealId) {
+    setLastMealId(meal?.id ?? null);
+    setForm(toForm(meal));
+  }
+
+  const isEdit = !!meal;
+
+  function update<K extends keyof typeof form>(key: K, val: (typeof form)[K]) {
+    setForm((f) => ({ ...f, [key]: val }));
+  }
+
+  function handleSubmit() {
+    const input = {
+      name: form.name,
+      diet: form.diet,
+      mealTypes: form.mealTypes,
+      cuisine: form.cuisine,
+      imageUrl: form.imageUrl,
+      ingredients: form.ingredients
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      recipe: form.recipe,
+      recipeUrl: form.recipeUrl,
+    };
+
+    startTransition(async () => {
+      const res = isEdit
+        ? await updateMeal(meal!.id, input)
+        : await createMeal(input);
+      if (res.ok) {
+        toast.success(isEdit ? "Meal updated" : "Meal added");
+        onOpenChange(false);
+      } else {
+        toast.error(res.error ?? "Something went wrong");
+      }
+    });
+  }
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await uploadMealImage(fd);
+    setUploading(false);
+    if (fileRef.current) fileRef.current.value = "";
+    if (res.ok && res.url) {
+      update("imageUrl", res.url);
+      toast.success("Image uploaded");
+    } else {
+      toast.error(res.error ?? "Upload failed");
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Edit meal" : "Add a meal"}</DialogTitle>
+          <DialogDescription>
+            Tag it so the planner can build a balanced, varied week.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5 py-2">
+          <div className="space-y-2">
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              value={form.name}
+              onChange={(e) => update("name", e.target.value)}
+              placeholder="e.g. Chickpea curry"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Diet</Label>
+            <div className="flex gap-2">
+              {(["veg", "nonveg"] as Diet[]).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => update("diet", d)}
+                  className={cn(
+                    "flex-1 rounded-md border px-3 py-2 text-sm transition-colors",
+                    form.diet === d
+                      ? d === "veg"
+                        ? "border-green-600 bg-green-600 text-white"
+                        : "border-rose-600 bg-rose-600 text-white"
+                      : "border-input hover:bg-muted"
+                  )}
+                >
+                  {d === "veg" ? "Vegetarian" : "Non-veg"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Meal types</Label>
+            <MealTypeSelect
+              value={form.mealTypes}
+              onChange={(v) => update("mealTypes", v)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Cuisine</Label>
+            <CuisineCombobox
+              value={form.cuisine}
+              onChange={(v) => update("cuisine", v)}
+              options={cuisines}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Image</Label>
+            {form.imageUrl ? (
+              <div className="relative w-full overflow-hidden rounded-md border">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={form.imageUrl}
+                  alt="Meal preview"
+                  className="h-40 w-full object-cover"
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="secondary"
+                  className="absolute right-2 top-2 h-7 w-7"
+                  onClick={() => update("imageUrl", "")}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <Tabs defaultValue="url">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="url">Paste URL</TabsTrigger>
+                  <TabsTrigger value="upload">Upload</TabsTrigger>
+                </TabsList>
+                <TabsContent value="url" className="pt-2">
+                  <Input
+                    placeholder="https://…"
+                    value={form.imageUrl}
+                    onChange={(e) => update("imageUrl", e.target.value)}
+                  />
+                </TabsContent>
+                <TabsContent value="upload" className="pt-2">
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFile}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    disabled={uploading}
+                    onClick={() => fileRef.current?.click()}
+                  >
+                    {uploading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="mr-2 h-4 w-4" />
+                    )}
+                    {uploading ? "Uploading…" : "Choose image"}
+                  </Button>
+                </TabsContent>
+              </Tabs>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="ingredients">Ingredients</Label>
+            <Textarea
+              id="ingredients"
+              value={form.ingredients}
+              onChange={(e) => update("ingredients", e.target.value)}
+              placeholder="One per line"
+              rows={4}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="recipe">Recipe</Label>
+            <Textarea
+              id="recipe"
+              value={form.recipe}
+              onChange={(e) => update("recipe", e.target.value)}
+              placeholder="Steps, notes…"
+              rows={4}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="recipeUrl">
+              Recipe link{" "}
+              <span className="font-normal text-muted-foreground">
+                (optional)
+              </span>
+            </Label>
+            <Input
+              id="recipeUrl"
+              type="url"
+              inputMode="url"
+              value={form.recipeUrl}
+              onChange={(e) => update("recipeUrl", e.target.value)}
+              placeholder="https://example.com/recipe"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} disabled={pending}>
+            {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isEdit ? "Save changes" : "Add meal"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function toForm(meal?: MealView | null) {
+  if (!meal) return { ...empty };
+  return {
+    name: meal.name,
+    diet: meal.diet,
+    mealTypes: meal.mealTypes,
+    cuisine: meal.cuisine,
+    imageUrl: meal.imageUrl,
+    ingredients: meal.ingredients.join("\n"),
+    recipe: meal.recipe,
+    recipeUrl: meal.recipeUrl,
+  };
+}
