@@ -6,6 +6,7 @@ import { dbConnect } from "@/lib/mongoose";
 import { Meal } from "@/models/Meal";
 import { getSession } from "@/lib/workspace";
 import { DIETS, MEAL_TYPES, type Diet, type MealType } from "@/lib/constants";
+import { getMealSuggestion, type MealSuggestion } from "@/lib/suggest";
 
 export interface MealInput {
   name: string;
@@ -21,6 +22,26 @@ export interface MealInput {
 export interface ActionResult {
   ok: boolean;
   error?: string;
+}
+
+export interface SuggestResult {
+  ok: boolean;
+  error?: string;
+  suggestion?: MealSuggestion;
+}
+
+export async function suggestMealDetails(name: string): Promise<SuggestResult> {
+  await getSession(); // require auth
+  const title = name?.trim();
+  if (!title || title.length < 2) {
+    return { ok: false, error: "Enter a meal name first." };
+  }
+  try {
+    const suggestion = await getMealSuggestion(title);
+    return { ok: true, suggestion };
+  } catch {
+    return { ok: false, error: "Couldn't fetch suggestions right now." };
+  }
 }
 
 function validate(input: MealInput): string | null {

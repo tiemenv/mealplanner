@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Loader2, Upload, X } from "lucide-react";
+import { Loader2, Upload, X, Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +30,7 @@ import {
   createMeal,
   updateMeal,
   uploadMealImage,
+  suggestMealDetails,
 } from "@/app/(app)/library/actions";
 
 interface Props {
@@ -55,6 +56,7 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
   const [lastMealId, setLastMealId] = useState(meal?.id ?? null);
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Reset form when the dialog target changes.
@@ -97,6 +99,64 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
     });
   }
 
+  async function handleAutofill() {
+    const title = form.name.trim();
+    if (title.length < 2) {
+      toast.error("Enter a meal name first.");
+      return;
+    }
+    setSuggesting(true);
+    const res = await suggestMealDetails(title);
+    setSuggesting(false);
+
+    if (!res.ok || !res.suggestion) {
+      toast.error(res.error ?? "Couldn't fetch suggestions.");
+      return;
+    }
+
+    const s = res.suggestion;
+    const filled: string[] = [];
+    setForm((f) => {
+      const next = { ...f };
+      if (!next.imageUrl && s.imageUrl) {
+        next.imageUrl = s.imageUrl;
+        filled.push("image");
+      }
+      if (!next.cuisine && s.cuisine) {
+        next.cuisine = s.cuisine;
+        filled.push("cuisine");
+      }
+      if (!next.ingredients.trim() && s.ingredients.length) {
+        next.ingredients = s.ingredients.join("\n");
+        filled.push("ingredients");
+      }
+      if (!next.recipe.trim() && s.recipe) {
+        next.recipe = s.recipe;
+        filled.push("recipe");
+      }
+      if (!next.recipeUrl.trim() && s.recipeUrl) {
+        next.recipeUrl = s.recipeUrl;
+        filled.push("recipe link");
+      }
+      // Diet has no "empty" state, so always apply a detected value.
+      if (s.diet && next.diet !== s.diet) {
+        next.diet = s.diet;
+        filled.push("diet");
+      }
+      return next;
+    });
+
+    if (filled.length === 0) {
+      toast.info(
+        s.matched
+          ? "Nothing new to fill — your fields are already set."
+          : "No match found. Try a more specific name."
+      );
+    } else {
+      toast.success(`Filled ${filled.join(", ")}. Review before saving.`);
+    }
+  }
+
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -127,12 +187,32 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
         <div className="space-y-5 py-2">
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              value={form.name}
-              onChange={(e) => update("name", e.target.value)}
-              placeholder="e.g. Chickpea curry"
-            />
+            <div className="flex gap-2">
+              <Input
+                id="name"
+                value={form.name}
+                onChange={(e) => update("name", e.target.value)}
+                placeholder="e.g. Chickpea curry"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAutofill}
+                disabled={suggesting || form.name.trim().length < 2}
+                className="shrink-0"
+              >
+                {suggesting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="mr-2 h-4 w-4" />
+                )}
+                Autofill
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Fills image, ingredients, recipe, cuisine and diet from the title.
+              Only empty fields are filled — review before saving.
+            </p>
           </div>
 
           <div className="space-y-2">
