@@ -4,9 +4,20 @@ import { revalidatePath } from "next/cache";
 import { put } from "@vercel/blob";
 import { dbConnect } from "@/lib/mongoose";
 import { Meal } from "@/models/Meal";
-import { getSession } from "@/lib/workspace";
+import { getSession, rejectImpersonators } from "@/lib/workspace";
 import { DIETS, MEAL_TYPES, type Diet, type MealType } from "@/lib/constants";
-import { getMealSuggestion, type MealSuggestion } from "@/lib/suggest";
+import {
+  getMealSuggestion,
+  fetchUnsplashImage,
+  inferDiet,
+  inferCuisine,
+  type MealSuggestion,
+} from "@/lib/suggest";
+import {
+  parseYouTubeUrl,
+  fetchYouTubeTitle,
+  extractRecipeFromYouTube,
+} from "@/lib/youtube";
 
 export interface MealInput {
   name: string;
@@ -42,6 +53,71 @@ export async function suggestMealDetails(name: string): Promise<SuggestResult> {
   } catch {
     return { ok: false, error: "Couldn't fetch suggestions right now." };
   }
+}
+
+export interface YouTubeImport {
+  title: string;
+  imageUrl: string;
+  ingredients: string[];
+  recipe: string;
+  recipeUrl: string;
+  cuisine: string;
+  diet: Diet | null;
+}
+
+export interface YouTubeImportResult {
+  ok: boolean;
+  error?: string;
+  import?: YouTubeImport;
+}
+
+export async function importFromYouTube(
+  rawUrl: string
+): Promise<YouTubeImportResult> {
+  await getSession(); // require auth
+
+  const parsed = parseYouTubeUrl(rawUrl);
+  if (!parsed) return { ok: false, error: "Enter a valid YouTube link." };
+
+  if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+    return {
+      ok: false,
+      error: "YouTube import isn't configured (missing Gemini API key).",
+    };
+  }
+
+  let recipe;
+  try {
+    recipe = await extractRecipeFromYouTube(parsed.url);
+  } catch {
+    return {
+      ok: false,
+      error: "Couldn't read that video. It may be private, too long, or unavailable.",
+    };
+  }
+
+  if (!recipe.isRecipe) {
+    return {
+      ok: false,
+      error: "That video doesn't seem to be a recipe.",
+    };
+  }
+
+  const title = recipe.title || (await fetchYouTubeTitle(parsed.url));
+  const image = title ? await fetchUnsplashImage(title) : "";
+
+  return {
+    ok: true,
+    import: {
+      title,
+      imageUrl: image,
+      ingredients: recipe.ingredients,
+      recipe: recipe.instructions,
+      recipeUrl: parsed.url,
+      cuisine: recipe.cuisine || inferCuisine(title),
+      diet: recipe.diet ?? inferDiet(title),
+    },
+  };
 }
 
 function validate(input: MealInput): string | null {
@@ -134,6 +210,9 @@ export async function updateMeal(
 }
 
 export async function deleteMeal(id: string): Promise<ActionResult> {
+  const impersonationError = await rejectImpersonators();
+  if (impersonationError) return { ok: false, error: impersonationError };
+
   const session = await getSession();
   await dbConnect();
 

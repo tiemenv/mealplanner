@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Loader2, Upload, X, Sparkles } from "lucide-react";
+import { Loader2, Upload, X, Sparkles, Clapperboard } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -31,6 +31,7 @@ import {
   updateMeal,
   uploadMealImage,
   suggestMealDetails,
+  importFromYouTube,
 } from "@/app/(app)/library/actions";
 
 interface Props {
@@ -57,12 +58,15 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Reset form when the dialog target changes.
   if ((meal?.id ?? null) !== lastMealId) {
     setLastMealId(meal?.id ?? null);
     setForm(toForm(meal));
+    setYoutubeUrl("");
   }
 
   const isEdit = !!meal;
@@ -157,6 +161,63 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
     }
   }
 
+  async function handleYoutubeImport() {
+    const url = youtubeUrl.trim();
+    if (!url) {
+      toast.error("Paste a YouTube link first.");
+      return;
+    }
+    setImporting(true);
+    const res = await importFromYouTube(url);
+    setImporting(false);
+
+    if (!res.ok || !res.import) {
+      toast.error(res.error ?? "Couldn't import that video.");
+      return;
+    }
+
+    const s = res.import;
+    const filled: string[] = [];
+    setForm((f) => {
+      const next = { ...f };
+      if (!next.name.trim() && s.title) {
+        next.name = s.title;
+        filled.push("name");
+      }
+      if (!next.imageUrl && s.imageUrl) {
+        next.imageUrl = s.imageUrl;
+        filled.push("image");
+      }
+      if (!next.cuisine && s.cuisine) {
+        next.cuisine = s.cuisine;
+        filled.push("cuisine");
+      }
+      if (!next.ingredients.trim() && s.ingredients.length) {
+        next.ingredients = s.ingredients.join("\n");
+        filled.push("ingredients");
+      }
+      if (!next.recipe.trim() && s.recipe) {
+        next.recipe = s.recipe;
+        filled.push("recipe");
+      }
+      if (!next.recipeUrl.trim() && s.recipeUrl) {
+        next.recipeUrl = s.recipeUrl;
+        filled.push("recipe link");
+      }
+      if (s.diet && next.diet !== s.diet) {
+        next.diet = s.diet;
+        filled.push("diet");
+      }
+      return next;
+    });
+
+    if (filled.length === 0) {
+      toast.info("Nothing new to fill — your fields are already set.");
+    } else {
+      toast.success(`Imported ${filled.join(", ")}. Review before saving.`);
+    }
+  }
+
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -185,6 +246,46 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
         </DialogHeader>
 
         <div className="space-y-5 py-2">
+          <div className="space-y-2 rounded-lg border bg-muted/40 p-3">
+            <Label htmlFor="youtube" className="flex items-center gap-1.5">
+              <Clapperboard className="h-4 w-4 text-red-600" /> Import from YouTube
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                id="youtube"
+                type="url"
+                inputMode="url"
+                value={youtubeUrl}
+                onChange={(e) => setYoutubeUrl(e.target.value)}
+                placeholder="Paste a recipe video or Short link"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (!importing) handleYoutubeImport();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleYoutubeImport}
+                disabled={importing || youtubeUrl.trim().length === 0}
+                className="shrink-0"
+              >
+                {importing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Clapperboard className="mr-2 h-4 w-4" />
+                )}
+                Import
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Transcribes the video and fills in the recipe. Longer videos take
+              a few seconds. Only empty fields are filled.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <div className="flex gap-2">

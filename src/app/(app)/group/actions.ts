@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { dbConnect } from "@/lib/mongoose";
-import { getSession } from "@/lib/workspace";
+import { getSession, rejectImpersonators } from "@/lib/workspace";
 import { Group, type GroupDoc } from "@/models/Group";
 import { Invite, type InviteDoc } from "@/models/Invite";
 import { UserProfile } from "@/models/UserProfile";
@@ -115,6 +115,9 @@ export async function inviteMember(email: string): Promise<ActionResult> {
 }
 
 export async function acceptInvite(inviteId: string): Promise<ActionResult> {
+  const impersonationError = await rejectImpersonators();
+  if (impersonationError) return { ok: false, error: impersonationError };
+
   const session = await getSession();
   if (session.workspace.type === "group") {
     return {
@@ -178,6 +181,9 @@ export async function revokeInvite(inviteId: string): Promise<ActionResult> {
 }
 
 export async function leaveGroup(): Promise<ActionResult> {
+  const impersonationError = await rejectImpersonators();
+  if (impersonationError) return { ok: false, error: impersonationError };
+
   const session = await getSession();
   if (session.workspace.type !== "group" || !session.workspace.group) {
     return { ok: false, error: "You're not in a group." };
@@ -216,6 +222,9 @@ export async function leaveGroup(): Promise<ActionResult> {
 }
 
 export async function removeMember(clerkId: string): Promise<ActionResult> {
+  const impersonationError = await rejectImpersonators();
+  if (impersonationError) return { ok: false, error: impersonationError };
+
   const session = await getSession();
   if (session.workspace.type !== "group" || !session.workspace.group) {
     return { ok: false, error: "Not in a group." };

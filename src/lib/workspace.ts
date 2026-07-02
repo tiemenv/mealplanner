@@ -1,5 +1,5 @@
 import "server-only";
-import { currentUser } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { dbConnect } from "@/lib/mongoose";
 import { UserProfile, type UserProfileDoc } from "@/models/UserProfile";
 import { Group, type GroupDoc } from "@/models/Group";
@@ -27,6 +27,8 @@ export interface Session {
   imageUrl: string;
   profile: UserProfileDoc;
   workspace: Workspace;
+  /** Clerk user ID of the admin impersonating this user, or null. */
+  impersonatedBy: string | null;
 }
 
 /**
@@ -35,7 +37,7 @@ export interface Session {
  * workspace (personal or group).
  */
 export async function getSession(): Promise<Session> {
-  const user = await currentUser();
+  const [user, { actor }] = await Promise.all([currentUser(), auth()]);
   if (!user) {
     throw new Error("Not authenticated");
   }
@@ -111,5 +113,17 @@ export async function getSession(): Promise<Session> {
     imageUrl: user.imageUrl ?? "",
     profile,
     workspace,
+    impersonatedBy: actor?.sub ?? null,
   };
+}
+
+/**
+ * Guard for sensitive mutations: returns an error message when the current
+ * session is an admin impersonating a user, otherwise null.
+ */
+export async function rejectImpersonators(): Promise<string | null> {
+  const { actor } = await auth();
+  return actor
+    ? "This action is disabled while impersonating a user."
+    : null;
 }

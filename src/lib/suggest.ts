@@ -53,7 +53,7 @@ export function inferCuisine(title: string): string {
   return "";
 }
 
-async function fetchUnsplashImage(query: string): Promise<string> {
+export async function fetchUnsplashImage(query: string): Promise<string> {
   const key = process.env.UNSPLASH_ACCESS_KEY;
   if (!key) return "";
   try {

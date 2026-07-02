@@ -3,7 +3,7 @@ import { UserButton } from "@clerk/nextjs";
 import { AppNav } from "@/components/app-nav";
 import { Badge } from "@/components/ui/badge";
 import { getSession } from "@/lib/workspace";
-import { Users, User } from "lucide-react";
+import { Users, User, VenetianMask } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +17,13 @@ export default async function AppLayout({
 
   return (
     <div className="flex flex-1 flex-col">
+      {session.impersonatedBy && (
+        <div className="flex items-center justify-center gap-2 bg-amber-500 px-4 py-1.5 text-sm font-medium text-amber-950">
+          <VenetianMask className="h-4 w-4 shrink-0" />
+          Impersonation mode — you are signed in as{" "}
+          {session.name || session.email}. Sensitive actions are disabled.
+        </div>
+      )}
       <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3">
           <div className="flex items-center gap-4">
