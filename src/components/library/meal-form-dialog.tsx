@@ -63,6 +63,7 @@ const empty = {
 export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
   const [form, setForm] = useState(() => toForm(meal));
   const [lastMealId, setLastMealId] = useState(meal?.id ?? null);
+  const [lastOpen, setLastOpen] = useState(open);
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
@@ -76,12 +77,18 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
   const [cyclingImage, setCyclingImage] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Reset form when the dialog target changes.
-  if ((meal?.id ?? null) !== lastMealId) {
-    setLastMealId(meal?.id ?? null);
-    setForm(toForm(meal));
-    setYoutubeUrl("");
-    setImageOptions(null);
+  // Reset on every open, not just when the target changes: adding two meals
+  // in a row leaves the target id null both times. Skipping the reset on close
+  // keeps the fields from blanking out during the dialog's exit animation.
+  const mealId = meal?.id ?? null;
+  if (open !== lastOpen || mealId !== lastMealId) {
+    setLastOpen(open);
+    setLastMealId(mealId);
+    if (open) {
+      setForm(toForm(meal));
+      setYoutubeUrl("");
+      setImageOptions(null);
+    }
   }
 
   const isEdit = !!meal;
