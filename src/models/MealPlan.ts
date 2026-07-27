@@ -7,6 +7,9 @@ const SlotSchema = new Schema(
     mealType: { type: String, enum: MEAL_TYPES, required: true },
     mealId: { type: Schema.Types.ObjectId, ref: "Meal", default: null },
     locked: { type: Boolean, default: false },
+    // Deliberately left open (eat out, leftovers, decide later). Never holds a
+    // meal, and the generator plans around it.
+    wildcard: { type: Boolean, default: false },
   },
   { _id: false }
 );

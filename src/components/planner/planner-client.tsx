@@ -18,6 +18,7 @@ import {
   CalendarRange,
   ShoppingCart,
   Plus,
+  CircleDashed,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,7 @@ import {
   toggleSlotLock,
   clearSlot,
   setSlotMeal,
+  setSlotWildcard,
 } from "@/app/(app)/planner/actions";
 
 interface SlotPos {
@@ -82,13 +84,15 @@ export function PlannerClient({
     let veg = 0;
     let nonveg = 0;
     let empty = 0;
+    let wildcard = 0;
     plan?.slots.forEach((s) => {
       const m = s.mealId ? mealById.get(s.mealId) : null;
-      if (!m) empty++;
+      if (s.wildcard) wildcard++;
+      else if (!m) empty++;
       else if (m.diet === "veg") veg++;
       else nonveg++;
     });
-    return { veg, nonveg, empty };
+    return { veg, nonveg, empty, wildcard };
   }, [plan, mealById]);
 
   const plannedMeals = useMemo(() => {
@@ -129,6 +133,13 @@ export function PlannerClient({
     setPickerSlot(null);
     if (!slot) return;
     runSlotAction(setSlotMeal(weekStart, slot.day, slot.mealType, mealId));
+  }
+
+  function handleWildcard() {
+    const slot = pickerSlot;
+    setPickerSlot(null);
+    if (!slot) return;
+    runSlotAction(setSlotWildcard(weekStart, slot.day, slot.mealType));
   }
 
   function handleDrop(target: SlotPos) {
@@ -207,6 +218,11 @@ export function PlannerClient({
                 <Badge className="gap-1 bg-rose-600 text-white">
                   <Drumstick className="h-3 w-3" /> {stats.nonveg}
                 </Badge>
+                {stats.wildcard > 0 && (
+                  <Badge variant="outline" className="gap-1">
+                    <CircleDashed className="h-3 w-3" /> {stats.wildcard}
+                  </Badge>
+                )}
                 {stats.empty > 0 && (
                   <Badge variant="outline">{stats.empty} empty</Badge>
                 )}
@@ -277,6 +293,7 @@ export function PlannerClient({
                         mealType={type}
                         meal={meal ?? null}
                         locked={!!slot?.locked}
+                        wildcard={!!slot?.wildcard}
                         disabled={pending}
                         isDragging={
                           dragSource?.day === dayIdx &&
@@ -336,6 +353,7 @@ export function PlannerClient({
             : ""
         }
         onSelect={handlePick}
+        onWildcard={handleWildcard}
       />
 
       <ShoppingListDialog
@@ -352,6 +370,7 @@ function SlotCell({
   mealType,
   meal,
   locked,
+  wildcard,
   disabled,
   isDragging,
   isDropTarget,
@@ -368,6 +387,7 @@ function SlotCell({
   mealType: MealType;
   meal: MealView | null;
   locked: boolean;
+  wildcard: boolean;
   disabled: boolean;
   isDragging: boolean;
   isDropTarget: boolean;
@@ -480,6 +500,26 @@ function SlotCell({
             />
           </button>
         </div>
+      ) : wildcard ? (
+        <button
+          type="button"
+          onClick={onPick}
+          disabled={disabled || locked}
+          title={locked ? "Unlock the slot first" : "Swap for a meal"}
+          className="flex w-full items-start gap-2 rounded text-left"
+        >
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded bg-muted">
+            <CircleDashed className="h-4 w-4 text-muted-foreground" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium leading-tight">
+              Wildcard
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              Left open
+            </span>
+          </span>
+        </button>
       ) : (
         <button
           type="button"
@@ -494,10 +534,14 @@ function SlotCell({
       )}
 
       <div className="mt-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-        <IconBtn title="Shuffle" onClick={onShuffle} disabled={disabled || locked}>
+        <IconBtn
+          title="Shuffle"
+          onClick={onShuffle}
+          disabled={disabled || locked || wildcard}
+        >
           <Shuffle className="h-3.5 w-3.5" />
         </IconBtn>
-        {meal && (
+        {(meal || wildcard) && (
           <IconBtn title="Clear" onClick={onClear} disabled={disabled}>
             <X className="h-3.5 w-3.5" />
           </IconBtn>

@@ -35,8 +35,9 @@ export default async function DashboardPage() {
   ]);
 
   const plan = planDoc ? serializeMealPlan(planDoc) : null;
+  // A wildcard is a decision too, so it counts as planned.
   const filled = plan
-    ? plan.slots.filter((s) => s.mealId).length
+    ? plan.slots.filter((s) => s.mealId || s.wildcard).length
     : 0;
 
   return (

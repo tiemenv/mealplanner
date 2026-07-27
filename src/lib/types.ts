@@ -17,6 +17,8 @@ export interface SlotView {
   mealType: MealType;
   mealId: string | null;
   locked: boolean;
+  /** Left open on purpose. Mutually exclusive with `mealId`. */
+  wildcard: boolean;
 }
 
 export interface MealPlanView {

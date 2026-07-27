@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Search, UtensilsCrossed } from "lucide-react";
+import { CircleDashed, Search, UtensilsCrossed } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +23,7 @@ export function MealPickerDialog({
   mealType,
   slotLabel,
   onSelect,
+  onWildcard,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -31,6 +32,7 @@ export function MealPickerDialog({
   /** e.g. "Monday · Breakfast", shown under the title. */
   slotLabel: string;
   onSelect: (mealId: string) => void;
+  onWildcard: () => void;
 }) {
   const [query, setQuery] = useState("");
   const [typeOnly, setTypeOnly] = useState(true);
@@ -105,6 +107,22 @@ export function MealPickerDialog({
             </span>
           </div>
         )}
+
+        <button
+          type="button"
+          onClick={onWildcard}
+          className="flex w-full items-center gap-3 rounded-md border border-dashed p-2 text-left transition-colors hover:bg-muted"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-muted">
+            <CircleDashed className="h-4 w-4 text-muted-foreground" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium">Wildcard</span>
+            <span className="block text-xs text-muted-foreground">
+              Leave it open — eat out, leftovers, decide later
+            </span>
+          </span>
+        </button>
 
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-8 text-center text-sm text-muted-foreground">

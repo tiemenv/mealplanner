@@ -73,10 +73,10 @@ export async function suggestMealImages(
     return { ok: false, error: "Enter a meal name first." };
   }
   if (!process.env.UNSPLASH_ACCESS_KEY) {
-    return {
-      ok: false,
-      error: "Image suggestions aren't configured (missing Unsplash key).",
-    };
+    console.error(
+      "[image-suggestions] misconfigured: UNSPLASH_ACCESS_KEY is not set"
+    );
+    return { ok: false, error: "Image suggestions aren't available right now." };
   }
   try {
     const images = await fetchUnsplashImages(title, 8);
@@ -114,10 +114,10 @@ export async function importFromYouTube(
   if (!parsed) return { ok: false, error: "Enter a valid YouTube link." };
 
   if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    return {
-      ok: false,
-      error: "YouTube import isn't configured (missing Gemini API key).",
-    };
+    console.error(
+      "[youtube-import] misconfigured: GOOGLE_GENERATIVE_AI_API_KEY is not set"
+    );
+    return { ok: false, error: "YouTube import isn't available right now." };
   }
 
   // Logged either side of the call so a run that never reports back can be
@@ -137,11 +137,14 @@ export async function importFromYouTube(
         ...failure,
       })}`
     );
+    // Why it broke stays in the log above. The reader only learns whether
+    // retrying is worth it — never which provider we use or that it rate
+    // limited us.
     return {
       ok: false,
       error:
         failure.kind === "quota"
-          ? "Gemini is out of quota for now. Wait a minute and try again."
+          ? "Imports are busy right now. Try again in a minute."
           : "Couldn't read that video. It may be private, too long, or unavailable.",
     };
   }

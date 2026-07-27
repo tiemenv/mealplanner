@@ -27,6 +27,8 @@ function toStoredSlots(slots: SlotView[]) {
     mealType: s.mealType,
     mealId: s.mealId ?? null,
     locked: !!s.locked,
+    // A slot holding a meal is never a wildcard, whatever the caller passed.
+    wildcard: !s.mealId && !!s.wildcard,
   }));
 }
 
@@ -48,11 +50,16 @@ export async function generatePlan(
     weekStart,
   }).lean()) as MealPlanDoc | null;
 
-  const locked: SlotView[] = existing
-    ? serializeMealPlan(existing).slots.filter((s) => s.locked && s.mealId)
+  const previous: SlotView[] = existing
+    ? serializeMealPlan(existing).slots
     : [];
 
-  const slots = generateWeek({ meals, vegPercent, locked });
+  const slots = generateWeek({
+    meals,
+    vegPercent,
+    locked: previous.filter((s) => s.locked && s.mealId),
+    wildcards: previous.filter((s) => s.wildcard),
+  });
 
   const doc = (await MealPlan.findOneAndUpdate(
     { ownerKey, weekStart },
@@ -107,7 +114,8 @@ export async function regenerateOneSlot(
 ): Promise<PlanResult> {
   return mutatePlan(weekStart, (slots, meals) => {
     const slot = slots.find((s) => s.day === day && s.mealType === mealType);
-    if (slot?.locked) return slots; // don't touch locked slots
+    // Locked and wildcard slots are both deliberate choices; leave them be.
+    if (slot?.locked || slot?.wildcard) return slots;
     return regenerateSlot(slots, { day, mealType }, meals);
   });
 }
@@ -120,7 +128,24 @@ export async function setSlotMeal(
 ): Promise<PlanResult> {
   return mutatePlan(weekStart, (slots) =>
     slots.map((s) =>
-      s.day === day && s.mealType === mealType ? { ...s, mealId } : s
+      s.day === day && s.mealType === mealType
+        ? { ...s, mealId, wildcard: false }
+        : s
+    )
+  );
+}
+
+/** Marks a slot as deliberately open, so the generator plans around it. */
+export async function setSlotWildcard(
+  weekStart: string,
+  day: number,
+  mealType: MealType
+): Promise<PlanResult> {
+  return mutatePlan(weekStart, (slots) =>
+    slots.map((s) =>
+      s.day === day && s.mealType === mealType
+        ? { ...s, mealId: null, wildcard: true }
+        : s
     )
   );
 }
@@ -150,10 +175,10 @@ export async function moveSlot(
     const tMeal = t.mealId;
     return slots.map((x) => {
       if (x.day === source.day && x.mealType === source.mealType) {
-        return { ...x, mealId: tMeal };
+        return { ...x, mealId: tMeal, wildcard: tMeal ? false : x.wildcard };
       }
       if (x.day === target.day && x.mealType === target.mealType) {
-        return { ...x, mealId: sMeal };
+        return { ...x, mealId: sMeal, wildcard: sMeal ? false : x.wildcard };
       }
       return x;
     });
@@ -182,7 +207,7 @@ export async function clearSlot(
   return mutatePlan(weekStart, (slots) =>
     slots.map((s) =>
       s.day === day && s.mealType === mealType
-        ? { ...s, mealId: null, locked: false }
+        ? { ...s, mealId: null, locked: false, wildcard: false }
         : s
     )
   );

@@ -27,6 +27,7 @@ export function serializeMealPlan(doc: MealPlanDoc): MealPlanView {
       mealType: s.mealType as MealType,
       mealId: s.mealId ? s.mealId.toString() : null,
       locked: !!s.locked,
+      wildcard: !!s.wildcard,
     })),
   };
 }

@@ -107,35 +107,52 @@ export interface GenerateOptions {
   vegPercent: number;
   /** Locked slots to preserve verbatim. */
   locked?: SlotView[];
+  /** Slots left open on purpose. Kept empty and planned around. */
+  wildcards?: SlotView[];
 }
 
 /**
  * Generates a full week (7 days x breakfast/lunch/dinner) honouring locked
- * slots, targeting the requested veg ratio, and maximising variety.
+ * and wildcard slots, targeting the requested veg ratio, and maximising
+ * variety.
  */
 export function generateWeek({
   meals,
   vegPercent,
   locked = [],
+  wildcards = [],
 }: GenerateOptions): SlotView[] {
   const mealById = new Map(meals.map((m) => [m.id, m]));
   const usage = new Map<string, number>();
 
-  const lockedByKey = new Map<string, SlotView>();
+  // Slots the generator must not fill, whether they hold a locked meal or are
+  // deliberately blank.
+  const reservedByKey = new Map<string, SlotView>();
+  for (const slot of wildcards) {
+    reservedByKey.set(`${slot.day}:${slot.mealType}`, {
+      day: slot.day,
+      mealType: slot.mealType,
+      mealId: null,
+      locked: false,
+      wildcard: true,
+    });
+  }
+
   let lockedVeg = 0;
   for (const slot of locked) {
     if (!slot.mealId) continue;
     const meal = mealById.get(slot.mealId);
     if (!meal) continue;
-    lockedByKey.set(`${slot.day}:${slot.mealType}`, {
+    reservedByKey.set(`${slot.day}:${slot.mealType}`, {
       ...slot,
       locked: true,
+      wildcard: false,
     });
     usage.set(meal.id, (usage.get(meal.id) ?? 0) + 1);
     if (meal.diet === "veg") lockedVeg++;
   }
 
-  // Collect unlocked slots, grouped by meal type.
+  // Collect fillable slots, grouped by meal type.
   const unlockedByType: Record<MealType, number[]> = {
     breakfast: [],
     lunch: [],
@@ -143,14 +160,19 @@ export function generateWeek({
   };
   for (let day = 0; day < TOTAL_DAYS; day++) {
     for (const type of MEAL_TYPES) {
-      if (!lockedByKey.has(`${day}:${type}`)) {
+      if (!reservedByKey.has(`${day}:${type}`)) {
         unlockedByType[type].push(day);
       }
     }
   }
 
   const totalSlots = TOTAL_DAYS * MEAL_TYPES.length;
-  const desiredVeg = Math.round((vegPercent / 100) * totalSlots);
+  // Wildcards never hold a meal, so the veg ratio applies to the rest.
+  const wildcardCount = [...reservedByKey.values()].filter(
+    (s) => s.wildcard
+  ).length;
+  const plannableSlots = totalSlots - wildcardCount;
+  const desiredVeg = Math.round((vegPercent / 100) * plannableSlots);
   let vegToPlace = Math.max(0, desiredVeg - lockedVeg);
 
   // Decide veg/nonveg counts per meal type, respecting availability.
@@ -216,7 +238,7 @@ export function generateWeek({
   // instead of being spent in the first two days.
   const servings: Record<Diet, number> = { veg: lockedVeg, nonveg: 0 };
   for (const type of MEAL_TYPES) servings.veg += vegCount[type];
-  servings.nonveg = totalSlots - servings.veg;
+  servings.nonveg = plannableSlots - servings.veg;
 
   const idealGap: Record<Diet, number> = {
     veg: servings.veg > 0 ? totalSlots / servings.veg : 0,
@@ -246,14 +268,14 @@ export function generateWeek({
   for (let day = 0; day < TOTAL_DAYS; day++) {
     for (const type of MEAL_TYPES) {
       const index = history.length;
-      const lockedSlot = lockedByKey.get(`${day}:${type}`);
-      if (lockedSlot) {
-        const lockedMeal = lockedSlot.mealId
-          ? mealById.get(lockedSlot.mealId)
+      const reserved = reservedByKey.get(`${day}:${type}`);
+      if (reserved) {
+        const reservedMeal = reserved.mealId
+          ? mealById.get(reserved.mealId)
           : undefined;
-        if (lockedMeal) lastServed[lockedMeal.diet] = index;
-        result.push(lockedSlot);
-        history.push(lockedMeal ? cuisineKey(lockedMeal) : null);
+        if (reservedMeal) lastServed[reservedMeal.diet] = index;
+        result.push(reserved);
+        history.push(reservedMeal ? cuisineKey(reservedMeal) : null);
         continue;
       }
 
@@ -283,6 +305,7 @@ export function generateWeek({
         mealType: type,
         mealId: meal ? meal.id : null,
         locked: false,
+        wildcard: false,
       });
     }
   }
