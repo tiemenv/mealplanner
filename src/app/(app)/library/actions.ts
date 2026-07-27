@@ -9,6 +9,7 @@ import { DIETS, MEAL_TYPES, type Diet, type MealType } from "@/lib/constants";
 import {
   getMealSuggestion,
   fetchUnsplashImage,
+  fetchUnsplashImages,
   inferDiet,
   inferCuisine,
   type MealSuggestion,
@@ -52,6 +53,37 @@ export async function suggestMealDetails(name: string): Promise<SuggestResult> {
     return { ok: true, suggestion };
   } catch {
     return { ok: false, error: "Couldn't fetch suggestions right now." };
+  }
+}
+
+export interface SuggestImagesResult {
+  ok: boolean;
+  error?: string;
+  images?: string[];
+}
+
+export async function suggestMealImages(
+  name: string
+): Promise<SuggestImagesResult> {
+  await getSession(); // require auth
+  const title = name?.trim();
+  if (!title || title.length < 2) {
+    return { ok: false, error: "Enter a meal name first." };
+  }
+  if (!process.env.UNSPLASH_ACCESS_KEY) {
+    return {
+      ok: false,
+      error: "Image suggestions aren't configured (missing Unsplash key).",
+    };
+  }
+  try {
+    const images = await fetchUnsplashImages(title, 8);
+    if (images.length === 0) {
+      return { ok: false, error: "No image suggestions found for that name." };
+    }
+    return { ok: true, images };
+  } catch {
+    return { ok: false, error: "Couldn't fetch image suggestions right now." };
   }
 }
 

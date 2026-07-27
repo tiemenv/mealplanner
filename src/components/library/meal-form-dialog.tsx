@@ -2,7 +2,14 @@
 
 import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Loader2, Upload, X, Sparkles, Clapperboard } from "lucide-react";
+import {
+  Loader2,
+  Upload,
+  X,
+  Sparkles,
+  Clapperboard,
+  Shuffle,
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +39,7 @@ import {
   uploadMealImage,
   suggestMealDetails,
   importFromYouTube,
+  suggestMealImages,
 } from "@/app/(app)/library/actions";
 
 interface Props {
@@ -60,6 +68,12 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
   const [suggesting, setSuggesting] = useState(false);
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [importing, setImporting] = useState(false);
+  const [imageOptions, setImageOptions] = useState<{
+    query: string;
+    urls: string[];
+    index: number;
+  } | null>(null);
+  const [cyclingImage, setCyclingImage] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Reset form when the dialog target changes.
@@ -67,6 +81,7 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
     setLastMealId(meal?.id ?? null);
     setForm(toForm(meal));
     setYoutubeUrl("");
+    setImageOptions(null);
   }
 
   const isEdit = !!meal;
@@ -218,6 +233,37 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
     }
   }
 
+  async function handleCycleImage() {
+    const title = form.name.trim();
+    if (title.length < 2) {
+      toast.error("Enter a meal name first.");
+      return;
+    }
+
+    // Cycle through the cached batch if it matches the current name.
+    if (imageOptions && imageOptions.query === title) {
+      const next = (imageOptions.index + 1) % imageOptions.urls.length;
+      setImageOptions({ ...imageOptions, index: next });
+      update("imageUrl", imageOptions.urls[next]);
+      return;
+    }
+
+    setCyclingImage(true);
+    const res = await suggestMealImages(title);
+    setCyclingImage(false);
+
+    if (!res.ok || !res.images?.length) {
+      toast.error(res.error ?? "No image suggestions found.");
+      return;
+    }
+
+    // Start at the first suggestion that differs from the current image.
+    const start = res.images.findIndex((u) => u !== form.imageUrl);
+    const index = start === -1 ? 0 : start;
+    setImageOptions({ query: title, urls: res.images, index });
+    update("imageUrl", res.images[index]);
+  }
+
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -357,7 +403,26 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
           </div>
 
           <div className="space-y-2">
-            <Label>Image</Label>
+            <div className="flex items-center justify-between">
+              <Label>Image</Label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleCycleImage}
+                disabled={cyclingImage || form.name.trim().length < 2}
+                className="h-7 gap-1.5 px-2 text-xs"
+              >
+                {cyclingImage ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Shuffle className="h-3.5 w-3.5" />
+                )}
+                {imageOptions && imageOptions.query === form.name.trim()
+                  ? `Next image (${imageOptions.index + 1}/${imageOptions.urls.length})`
+                  : "Suggest image"}
+              </Button>
+            </div>
             {form.imageUrl ? (
               <div className="relative w-full overflow-hidden rounded-md border">
                 {/* eslint-disable-next-line @next/next/no-img-element */}

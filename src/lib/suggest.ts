@@ -53,27 +53,36 @@ export function inferCuisine(title: string): string {
   return "";
 }
 
-export async function fetchUnsplashImage(query: string): Promise<string> {
+export async function fetchUnsplashImages(
+  query: string,
+  count = 8
+): Promise<string[]> {
   const key = process.env.UNSPLASH_ACCESS_KEY;
-  if (!key) return "";
+  if (!key) return [];
   try {
     const url = new URL("https://api.unsplash.com/search/photos");
     url.searchParams.set("query", `${query} food`);
-    url.searchParams.set("per_page", "1");
+    url.searchParams.set("per_page", String(count));
     url.searchParams.set("orientation", "landscape");
     url.searchParams.set("content_filter", "high");
     const res = await fetch(url, {
       headers: { Authorization: `Client-ID ${key}` },
     });
-    if (!res.ok) return "";
+    if (!res.ok) return [];
     const data = (await res.json()) as {
       results?: { urls?: { regular?: string; small?: string } }[];
     };
-    const urls = data.results?.[0]?.urls;
-    return urls?.regular ?? urls?.small ?? "";
+    return (data.results ?? [])
+      .map((r) => r.urls?.regular ?? r.urls?.small ?? "")
+      .filter(Boolean);
   } catch {
-    return "";
+    return [];
   }
+}
+
+export async function fetchUnsplashImage(query: string): Promise<string> {
+  const images = await fetchUnsplashImages(query, 1);
+  return images[0] ?? "";
 }
 
 interface SpoonacularHit {
