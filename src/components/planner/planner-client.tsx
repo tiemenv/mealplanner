@@ -17,12 +17,14 @@ import {
   Drumstick,
   CalendarRange,
   ShoppingCart,
+  Plus,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { MealDetailDialog } from "@/components/planner/meal-detail-dialog";
+import { MealPickerDialog } from "@/components/planner/meal-picker-dialog";
 import { ShoppingListDialog } from "@/components/planner/shopping-list-dialog";
 import { MEAL_TYPES, MEAL_TYPE_LABELS, type MealType } from "@/lib/constants";
 import { DAY_NAMES, formatWeekRange, dateForDay, shiftWeek, getWeekStart } from "@/lib/week";
@@ -34,6 +36,7 @@ import {
   moveSlot,
   toggleSlotLock,
   clearSlot,
+  setSlotMeal,
 } from "@/app/(app)/planner/actions";
 
 interface SlotPos {
@@ -59,6 +62,7 @@ export function PlannerClient({
   const [vegPercent, setVegPercent] = useState(initialPlan?.vegPercent ?? 50);
   const [pending, startTransition] = useTransition();
   const [viewMeal, setViewMeal] = useState<MealView | null>(null);
+  const [pickerSlot, setPickerSlot] = useState<SlotPos | null>(null);
   const [dragSource, setDragSource] = useState<SlotPos | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [shoppingOpen, setShoppingOpen] = useState(false);
@@ -118,6 +122,13 @@ export function PlannerClient({
       if (res.ok && res.plan) setPlan(res.plan);
       else toast.error(res.error ?? "Failed");
     });
+  }
+
+  function handlePick(mealId: string) {
+    const slot = pickerSlot;
+    setPickerSlot(null);
+    if (!slot) return;
+    runSlotAction(setSlotMeal(weekStart, slot.day, slot.mealType, mealId));
   }
 
   function handleDrop(target: SlotPos) {
@@ -241,8 +252,8 @@ export function PlannerClient({
         <div className="space-y-3">
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <GripVertical className="h-3.5 w-3.5" />
-            Drag a meal onto another slot to move or swap it. Lock a slot to keep
-            it.
+            Drag a meal onto another slot to move or swap it. Click an empty slot
+            to pick one from your library. Lock a slot to keep it.
           </p>
           {DAY_NAMES.map((dayName, dayIdx) => (
             <Card key={dayName} className="overflow-hidden p-0">
@@ -284,6 +295,9 @@ export function PlannerClient({
                           runSlotAction(clearSlot(weekStart, dayIdx, type))
                         }
                         onView={() => meal && setViewMeal(meal)}
+                        onPick={() =>
+                          setPickerSlot({ day: dayIdx, mealType: type })
+                        }
                         onDragStart={() =>
                           setDragSource({ day: dayIdx, mealType: type })
                         }
@@ -311,6 +325,19 @@ export function PlannerClient({
         onOpenChange={(o) => !o && setViewMeal(null)}
       />
 
+      <MealPickerDialog
+        open={pickerSlot !== null}
+        onOpenChange={(o) => !o && setPickerSlot(null)}
+        meals={meals}
+        mealType={pickerSlot?.mealType ?? null}
+        slotLabel={
+          pickerSlot
+            ? `${DAY_NAMES[pickerSlot.day]} · ${MEAL_TYPE_LABELS[pickerSlot.mealType]}`
+            : ""
+        }
+        onSelect={handlePick}
+      />
+
       <ShoppingListDialog
         open={shoppingOpen}
         onOpenChange={setShoppingOpen}
@@ -332,6 +359,7 @@ function SlotCell({
   onShuffle,
   onClear,
   onView,
+  onPick,
   onDragStart,
   onDragEnd,
   onDragEnterSlot,
@@ -347,6 +375,7 @@ function SlotCell({
   onShuffle: () => void;
   onClear: () => void;
   onView: () => void;
+  onPick: () => void;
   onDragStart: () => void;
   onDragEnd: () => void;
   onDragEnterSlot: () => void;
@@ -452,9 +481,16 @@ function SlotCell({
           </button>
         </div>
       ) : (
-        <p className="py-1 text-xs text-muted-foreground">
-          No meal — drop one here
-        </p>
+        <button
+          type="button"
+          onClick={onPick}
+          disabled={disabled || locked}
+          title={locked ? "Unlock the slot first" : "Pick a meal"}
+          className="flex w-full items-center gap-1.5 rounded py-1 text-xs text-muted-foreground hover:text-foreground disabled:hover:text-muted-foreground"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {locked ? "No meal" : "Add a meal or drop one here"}
+        </button>
       )}
 
       <div className="mt-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
