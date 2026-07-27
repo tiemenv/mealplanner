@@ -1,4 +1,4 @@
-import { MEAL_TYPES, type Diet, type MealType } from "@/lib/constants";
+import { DIETS, MEAL_TYPES, type Diet, type MealType } from "@/lib/constants";
 import type { MealView, SlotView } from "@/lib/types";
 
 const TOTAL_DAYS = 7;
@@ -25,21 +25,81 @@ function buildPools(meals: MealView[], type: MealType): Pools {
   };
 }
 
+/** Serving the same meal twice is worse than any amount of clustering, so
+ *  this dwarfs the spacing penalties below and keeps least-used selection. */
+const REUSE_PENALTY = 10_000;
+/** How many slots a cuisine keeps pushing back on, and how hard it pushes
+ *  from one slot away. */
+const CUISINE_WINDOW = 4;
+const CUISINE_PENALTY = 30;
+/** Cost of serving a diet sooner than its share of the week allows. */
+const DIET_SPACING_PENALTY = 150;
+
+/** A cuisine already placed near the slot being filled. `distance` counts
+ *  slots in the week's running order, so 1 is the meal right beside it. */
+interface NearbyCuisine {
+  distance: number;
+  cuisine: string;
+}
+
+interface SlotContext {
+  nearby: NearbyCuisine[];
+  /** Cost of each diet here. Omitted when the slot's diet is already fixed. */
+  dietCost?: Record<Diet, number>;
+}
+
+function cuisineKey(meal: MealView): string {
+  return meal.cuisine.trim().toLowerCase();
+}
+
+/** Lower is better: reuse dominates, then bunching a diet or a cuisine. */
+function scoreMeal(
+  meal: MealView,
+  usage: Map<string, number>,
+  ctx: SlotContext
+): number {
+  let score = (usage.get(meal.id) ?? 0) * REUSE_PENALTY;
+  score += ctx.dietCost?.[meal.diet] ?? 0;
+  const cuisine = cuisineKey(meal);
+  if (cuisine) {
+    for (const n of ctx.nearby) {
+      if (n.cuisine === cuisine) {
+        score += (CUISINE_WINDOW - n.distance + 1) * CUISINE_PENALTY;
+      }
+    }
+  }
+  return score;
+}
+
 /**
- * Picks the least-used meal from a pool (random among ties) to maximise
- * variety, and records the usage so subsequent picks avoid repetition.
+ * Picks the best-scoring meal from a pool (random among ties) and records the
+ * usage so subsequent picks avoid repetition.
  */
-function pickLeastUsed(
+function pickMeal(
   pool: MealView[],
-  usage: Map<string, number>
+  usage: Map<string, number>,
+  ctx: SlotContext
 ): MealView | null {
   if (pool.length === 0) return null;
-  let min = Infinity;
-  for (const m of pool) min = Math.min(min, usage.get(m.id) ?? 0);
-  const candidates = shuffle(pool.filter((m) => (usage.get(m.id) ?? 0) === min));
-  const chosen = candidates[0];
+  const scored = pool.map((meal) => ({
+    meal,
+    score: scoreMeal(meal, usage, ctx),
+  }));
+  let best = Infinity;
+  for (const s of scored) best = Math.min(best, s.score);
+  const chosen = shuffle(scored.filter((s) => s.score === best))[0].meal;
   usage.set(chosen.id, (usage.get(chosen.id) ?? 0) + 1);
   return chosen;
+}
+
+/** Cuisines close enough behind `history` to still matter. */
+function precedingCuisines(history: (string | null)[]): NearbyCuisine[] {
+  const nearby: NearbyCuisine[] = [];
+  for (let distance = 1; distance <= CUISINE_WINDOW; distance++) {
+    const cuisine = history[history.length - distance];
+    if (cuisine) nearby.push({ distance, cuisine });
+  }
+  return nearby;
 }
 
 export interface GenerateOptions {
@@ -141,25 +201,83 @@ export function generateWeek({
     }
   }
 
-  const result: SlotView[] = [];
-  // Re-add locked slots.
-  for (const slot of lockedByKey.values()) result.push(slot);
-
+  // Remaining veg/non-veg slots per meal type. These sum to that type's
+  // unlocked slot count, so the ratio decided above still lands exactly.
+  const budget = {} as Record<MealType, { veg: number; nonveg: number }>;
   for (const type of MEAL_TYPES) {
-    const days = shuffle(unlockedByType[type]);
-    const { veg, nonveg } = pools[type];
-    let vegLeft = vegCount[type];
+    budget[type] = {
+      veg: vegCount[type],
+      nonveg: unlockedByType[type].length - vegCount[type],
+    };
+  }
 
-    for (const day of days) {
-      let meal: MealView | null = null;
-      if (vegLeft > 0 && veg.length > 0) {
-        meal = pickLeastUsed(veg, usage);
-        vegLeft--;
-      } else if (nonveg.length > 0) {
-        meal = pickLeastUsed(nonveg, usage);
-      } else if (veg.length > 0) {
-        meal = pickLeastUsed(veg, usage);
+  // Spread each diet by its share of the week: at 50/50 that alternates every
+  // slot, while a 4-in-21 minority is held back to roughly every fifth slot
+  // instead of being spent in the first two days.
+  const servings: Record<Diet, number> = { veg: lockedVeg, nonveg: 0 };
+  for (const type of MEAL_TYPES) servings.veg += vegCount[type];
+  servings.nonveg = totalSlots - servings.veg;
+
+  const idealGap: Record<Diet, number> = {
+    veg: servings.veg > 0 ? totalSlots / servings.veg : 0,
+    nonveg: servings.nonveg > 0 ? totalSlots / servings.nonveg : 0,
+  };
+  const lastServed: Record<Diet, number> = {
+    veg: -Infinity,
+    nonveg: -Infinity,
+  };
+
+  function dietCostAt(index: number): Record<Diet, number> {
+    const cost = { veg: 0, nonveg: 0 };
+    for (const diet of DIETS) {
+      const ideal = idealGap[diet];
+      if (ideal <= 0) continue;
+      const gap = index - lastServed[diet];
+      cost[diet] = DIET_SPACING_PENALTY * Math.max(0, (ideal - gap) / ideal);
+    }
+    return cost;
+  }
+
+  const result: SlotView[] = [];
+  const history: (string | null)[] = [];
+
+  // Fill in the order the week is eaten, so every pick can see the meals it
+  // will sit next to and avoid echoing their diet or cuisine.
+  for (let day = 0; day < TOTAL_DAYS; day++) {
+    for (const type of MEAL_TYPES) {
+      const index = history.length;
+      const lockedSlot = lockedByKey.get(`${day}:${type}`);
+      if (lockedSlot) {
+        const lockedMeal = lockedSlot.mealId
+          ? mealById.get(lockedSlot.mealId)
+          : undefined;
+        if (lockedMeal) lastServed[lockedMeal.diet] = index;
+        result.push(lockedSlot);
+        history.push(lockedMeal ? cuisineKey(lockedMeal) : null);
+        continue;
       }
+
+      const left = budget[type];
+      const { veg, nonveg } = pools[type];
+      // Offer only the diets the ratio still has room for; the scorer then
+      // picks whichever of them sits best next to what came before.
+      let pool = [
+        ...(left.veg > 0 ? veg : []),
+        ...(left.nonveg > 0 ? nonveg : []),
+      ];
+      if (pool.length === 0) pool = [...veg, ...nonveg];
+
+      const meal = pickMeal(pool, usage, {
+        nearby: precedingCuisines(history),
+        dietCost: dietCostAt(index),
+      });
+      if (meal) {
+        if (meal.diet === "veg") left.veg = Math.max(0, left.veg - 1);
+        else left.nonveg = Math.max(0, left.nonveg - 1);
+        lastServed[meal.diet] = index;
+      }
+
+      history.push(meal ? cuisineKey(meal) : null);
       result.push({
         day,
         mealType: type,
@@ -170,6 +288,26 @@ export function generateWeek({
   }
 
   return sortSlots(result);
+}
+
+/** Cuisines on both sides of `index` within the ordered week. */
+function surroundingCuisines(
+  ordered: SlotView[],
+  index: number,
+  mealById: Map<string, MealView>
+): NearbyCuisine[] {
+  if (index < 0) return [];
+  const nearby: NearbyCuisine[] = [];
+  for (let distance = 1; distance <= CUISINE_WINDOW; distance++) {
+    for (const i of [index - distance, index + distance]) {
+      if (i < 0 || i >= ordered.length) continue;
+      const mealId = ordered[i].mealId;
+      const meal = mealId ? mealById.get(mealId) : undefined;
+      const cuisine = meal ? cuisineKey(meal) : "";
+      if (cuisine) nearby.push({ distance, cuisine });
+    }
+  }
+  return nearby;
 }
 
 /**
@@ -190,6 +328,12 @@ export function regenerateSlot(
     }
   }
 
+  const ordered = sortSlots(slots);
+  const index = ordered.findIndex(
+    (s) => s.day === target.day && s.mealType === target.mealType
+  );
+  const nearby = surroundingCuisines(ordered, index, mealById);
+
   const pools = buildPools(meals, target.mealType);
   const current = slots.find(
     (s) => s.day === target.day && s.mealType === target.mealType
@@ -206,7 +350,7 @@ export function regenerateSlot(
     pool = pool.filter((m) => m.id !== currentMeal.id);
   }
 
-  const chosen = pickLeastUsed(pool, usage);
+  const chosen = pickMeal(pool, usage, { nearby });
 
   return slots.map((s) =>
     s.day === target.day && s.mealType === target.mealType
