@@ -1,6 +1,6 @@
 import "server-only";
 import { google } from "@ai-sdk/google";
-import { generateText, Output } from "ai";
+import { APICallError, RetryError, generateText, Output } from "ai";
 import { z } from "zod";
 import type { Diet } from "@/lib/constants";
 
@@ -131,5 +131,64 @@ export async function extractRecipeFromYouTube(
     instructions: output.instructions?.trim() ?? "",
     cuisine: output.cuisine?.trim() ?? "",
     diet: output.diet === "unknown" ? null : output.diet,
+  };
+}
+
+/** Flat, log-friendly summary of why an import failed. Kept flat so each
+ *  field can be searched on its own in the Vercel logs. */
+export interface ImportFailure {
+  /** `quota` covers both per-minute rate limits and exhausted daily quota. */
+  kind: "quota" | "api" | "unknown";
+  name: string;
+  message: string;
+  statusCode?: number;
+  /** Google puts the real reason in the body, e.g. RESOURCE_EXHAUSTED. */
+  responseBody?: string;
+  retryAfter?: string;
+  isRetryable?: boolean;
+  url?: string;
+  /** How many times the SDK tried before giving up. */
+  attempts?: number;
+}
+
+function truncate(value: string | undefined, max = 600): string | undefined {
+  if (!value) return undefined;
+  return value.length > max ? `${value.slice(0, max)}…` : value;
+}
+
+/** Unwraps an AI SDK failure into something worth writing to the logs. */
+export function describeImportFailure(error: unknown): ImportFailure {
+  // The SDK retries transient failures and wraps them, so dig out the call
+  // that actually failed rather than reporting the wrapper.
+  let attempts: number | undefined;
+  let cause: unknown = error;
+  if (RetryError.isInstance(error)) {
+    attempts = error.errors.length;
+    cause = error.lastError;
+  }
+
+  if (APICallError.isInstance(cause)) {
+    const body = cause.responseBody ?? "";
+    const outOfQuota =
+      cause.statusCode === 429 || /RESOURCE_EXHAUSTED|quota/i.test(body);
+    return {
+      kind: outOfQuota ? "quota" : "api",
+      name: cause.name,
+      message: cause.message,
+      statusCode: cause.statusCode,
+      responseBody: truncate(body),
+      retryAfter: cause.responseHeaders?.["retry-after"],
+      isRetryable: cause.isRetryable,
+      // Drop the query string in case a key ever rides along in the URL.
+      url: cause.url.split("?")[0],
+      attempts,
+    };
+  }
+
+  return {
+    kind: "unknown",
+    name: cause instanceof Error ? cause.name : typeof cause,
+    message: cause instanceof Error ? cause.message : String(cause),
+    attempts,
   };
 }

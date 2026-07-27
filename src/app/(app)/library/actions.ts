@@ -19,6 +19,7 @@ import {
   fetchYouTubeTitle,
   fetchYouTubeThumbnail,
   extractRecipeFromYouTube,
+  describeImportFailure,
 } from "@/lib/youtube";
 
 export interface MealInput {
@@ -119,15 +120,39 @@ export async function importFromYouTube(
     };
   }
 
+  // Logged either side of the call so a run that never reports back can be
+  // told apart from one that failed: the former means the function timed out.
+  const startedAt = Date.now();
+  console.log(`[youtube-import] start ${JSON.stringify({ video: parsed.id })}`);
+
   let recipe;
   try {
     recipe = await extractRecipeFromYouTube(parsed.url);
-  } catch {
+  } catch (error) {
+    const failure = describeImportFailure(error);
+    console.error(
+      `[youtube-import] failed ${JSON.stringify({
+        video: parsed.id,
+        ms: Date.now() - startedAt,
+        ...failure,
+      })}`
+    );
     return {
       ok: false,
-      error: "Couldn't read that video. It may be private, too long, or unavailable.",
+      error:
+        failure.kind === "quota"
+          ? "Gemini is out of quota for now. Wait a minute and try again."
+          : "Couldn't read that video. It may be private, too long, or unavailable.",
     };
   }
+
+  console.log(
+    `[youtube-import] done ${JSON.stringify({
+      video: parsed.id,
+      ms: Date.now() - startedAt,
+      isRecipe: recipe.isRecipe,
+    })}`
+  );
 
   if (!recipe.isRecipe) {
     return {
