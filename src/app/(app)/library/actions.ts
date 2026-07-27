@@ -17,6 +17,7 @@ import {
 import {
   parseYouTubeUrl,
   fetchYouTubeTitle,
+  fetchYouTubeThumbnail,
   extractRecipeFromYouTube,
 } from "@/lib/youtube";
 
@@ -136,7 +137,11 @@ export async function importFromYouTube(
   }
 
   const title = recipe.title || (await fetchYouTubeTitle(parsed.url));
-  const image = title ? await fetchUnsplashImage(title) : "";
+  // The video's own thumbnail shows the actual dish, so prefer it over a
+  // generic stock photo.
+  const image =
+    (await fetchYouTubeThumbnail(parsed.id)) ||
+    (title ? await fetchUnsplashImage(title) : "");
 
   return {
     ok: true,

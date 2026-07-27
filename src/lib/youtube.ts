@@ -44,6 +44,24 @@ export async function fetchYouTubeTitle(url: string): Promise<string> {
   }
 }
 
+/** Thumbnail sizes YouTube serves, largest first. Only `hqdefault` is
+ *  guaranteed to exist; the bigger ones depend on the upload resolution. */
+const THUMBNAIL_SIZES = ["maxresdefault", "sddefault", "hqdefault"] as const;
+
+/** Returns the highest-resolution thumbnail available for a video, or "". */
+export async function fetchYouTubeThumbnail(id: string): Promise<string> {
+  for (const size of THUMBNAIL_SIZES) {
+    const url = `https://i.ytimg.com/vi/${id}/${size}.jpg`;
+    try {
+      const res = await fetch(url, { method: "HEAD" });
+      if (res.ok) return url;
+    } catch {
+      // Network hiccup — try the next size rather than failing the import.
+    }
+  }
+  return "";
+}
+
 export interface YouTubeRecipe {
   isRecipe: boolean;
   title: string;
