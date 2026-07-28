@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Mealmate">
+  <rect width="512" height="512" rx="112" fill="#171717"/>
+  <path d="M196 132c48-14 92 6 118 34 20 22 46 26 68 40 30 19 42 56 30 88-13 34-49 52-84 46-26-4-44-22-70-26-30-5-58 10-88 4-36-7-60-42-56-79 3-31 25-54 40-80 12-20 20-21 42-27z" fill="#fafafa"/>
+  <circle cx="228" cy="252" r="62" fill="#f59e0b"/>
+  <circle cx="208" cy="232" r="20" fill="#fbbf24" opacity="0.85"/>
+</svg>

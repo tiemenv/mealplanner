@@ -21,6 +21,14 @@ import {
   extractRecipesFromYouTube,
   describeImportFailure,
 } from "@/lib/youtube";
+import {
+  parseTikTokUrl,
+  resolveTikTokUrl,
+  fetchTikTokPost,
+  extractRecipesFromCaption,
+  type TikTokLink,
+} from "@/lib/tiktok";
+import { isRecipeComplete } from "@/lib/recipe-extraction";
 
 export interface MealInput {
   name: string;
@@ -89,7 +97,7 @@ export async function suggestMealImages(
   }
 }
 
-export interface YouTubeImport {
+export interface VideoImport {
   title: string;
   imageUrl: string;
   ingredients: string[];
@@ -98,30 +106,45 @@ export interface YouTubeImport {
   cuisine: string;
   diet: Diet | null;
   mealTypes: MealType[];
+  source: "youtube" | "tiktok";
+  /** The source named a dish but never said how to cook it, so the draft
+   *  arrives with everything except the ingredients and the steps. */
+  needsRecipe: boolean;
 }
 
-export interface YouTubeImportResult {
+export interface VideoImportResult {
   ok: boolean;
   error?: string;
   /** One draft per recipe found — compilation videos yield several. */
-  imports?: YouTubeImport[];
+  imports?: VideoImport[];
 }
 
-export async function importFromYouTube(
+/** Imports from whichever platform the link belongs to. */
+export async function importFromVideo(
   rawUrl: string
-): Promise<YouTubeImportResult> {
+): Promise<VideoImportResult> {
   await getSession(); // require auth
-
-  const parsed = parseYouTubeUrl(rawUrl);
-  if (!parsed) return { ok: false, error: "Enter a valid YouTube link." };
 
   if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
     console.error(
-      "[youtube-import] misconfigured: GOOGLE_GENERATIVE_AI_API_KEY is not set"
+      "[video-import] misconfigured: GOOGLE_GENERATIVE_AI_API_KEY is not set"
     );
-    return { ok: false, error: "YouTube import isn't available right now." };
+    return { ok: false, error: "Video import isn't available right now." };
   }
 
+  const tiktok = parseTikTokUrl(rawUrl);
+  if (tiktok) return importTikTok(tiktok);
+
+  const youtube = parseYouTubeUrl(rawUrl);
+  if (youtube) return importYouTube(youtube);
+
+  return { ok: false, error: "Enter a YouTube or TikTok link." };
+}
+
+async function importYouTube(parsed: {
+  url: string;
+  id: string;
+}): Promise<VideoImportResult> {
   // Logged either side of the call so a run that never reports back can be
   // told apart from one that failed: the former means the function timed out.
   const startedAt = Date.now();
@@ -198,11 +221,130 @@ export async function importFromYouTube(
         cuisine: recipe.cuisine || inferCuisine(title),
         diet: recipe.diet ?? inferDiet(title),
         mealTypes: recipe.mealTypes,
+        source: "youtube" as const,
+        needsRecipe: !isRecipeComplete(recipe),
       };
     })
   );
 
   return { ok: true, imports };
+}
+
+/** TikTok recipes usually live in the caption, which is free to read and far
+ *  quicker than watching the video. Captions that only name the dish still
+ *  yield a head start: a title, a cover photo, cuisine and diet. */
+async function importTikTok(link: TikTokLink): Promise<VideoImportResult> {
+  const resolved = await resolveTikTokUrl(link);
+  if (!resolved) {
+    return { ok: false, error: "Couldn't open that TikTok link." };
+  }
+
+  const post = await fetchTikTokPost(resolved.url);
+  if (!post) {
+    return {
+      ok: false,
+      error: "Couldn't read that TikTok. It may be private or removed.",
+    };
+  }
+  if (!post.caption) {
+    return { ok: false, error: "That TikTok has no caption to read." };
+  }
+
+  const startedAt = Date.now();
+  console.log(
+    `[tiktok-import] start ${JSON.stringify({
+      video: resolved.id,
+      caption: post.caption.length,
+    })}`
+  );
+
+  let extraction;
+  try {
+    extraction = await extractRecipesFromCaption(post.caption);
+  } catch (error) {
+    const failure = describeImportFailure(error);
+    console.error(
+      `[tiktok-import] failed ${JSON.stringify({
+        video: resolved.id,
+        ms: Date.now() - startedAt,
+        ...failure,
+      })}`
+    );
+    return {
+      ok: false,
+      error:
+        failure.kind === "quota"
+          ? "Imports are busy right now. Try again in a minute."
+          : "Couldn't read that TikTok.",
+    };
+  }
+
+  console.log(
+    `[tiktok-import] done ${JSON.stringify({
+      video: resolved.id,
+      ms: Date.now() - startedAt,
+      isRecipe: extraction.isRecipe,
+      recipes: extraction.recipes.length,
+      complete: extraction.recipes.filter(isRecipeComplete).length,
+    })}`
+  );
+
+  if (!extraction.isRecipe) {
+    return { ok: false, error: "That TikTok doesn't seem to be a recipe." };
+  }
+
+  const single = extraction.recipes.length === 1;
+  // Copied at most once, and only if a dish actually ends up using it.
+  let cover: Promise<string> | null = null;
+  const coverImage = () => (cover ??= persistCoverImage(post.thumbnailUrl));
+
+  const imports = await Promise.all(
+    extraction.recipes.map(async (recipe) => {
+      const title = recipe.title;
+      // One dish per video means the cover is a photo of that dish. With
+      // several it can only match one of them, so search per dish first.
+      const imageUrl = single
+        ? (await coverImage()) || (title ? await fetchUnsplashImage(title) : "")
+        : (title ? await fetchUnsplashImage(title) : "") || (await coverImage());
+
+      return {
+        title,
+        imageUrl,
+        ingredients: recipe.ingredients,
+        recipe: recipe.instructions,
+        // TikTok has no equivalent of YouTube's &t=, so every dish in a
+        // compilation links to the same place.
+        recipeUrl: resolved.url,
+        cuisine: recipe.cuisine || inferCuisine(title),
+        diet: recipe.diet ?? inferDiet(title),
+        mealTypes: recipe.mealTypes,
+        source: "tiktok" as const,
+        needsRecipe: !isRecipeComplete(recipe),
+      };
+    })
+  );
+
+  return { ok: true, imports };
+}
+
+/** TikTok cover URLs are signed and stop working within days, so the bytes are
+ *  copied into Blob storage. Without a store configured the original URL is
+ *  still better than no picture, it just won't last. */
+async function persistCoverImage(url: string): Promise<string> {
+  if (!url) return "";
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return url;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return "";
+    const blob = await put(`meals/tiktok-${Date.now()}.jpg`, await res.blob(), {
+      access: "public",
+      addRandomSuffix: true,
+      contentType: res.headers.get("content-type") ?? "image/jpeg",
+    });
+    return blob.url;
+  } catch {
+    return "";
+  }
 }
 
 function validate(input: MealInput): string | null {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   Loader2,
@@ -9,6 +9,7 @@ import {
   Sparkles,
   Clapperboard,
   Shuffle,
+  TriangleAlert,
 } from "lucide-react";
 import {
   Dialog,
@@ -38,9 +39,9 @@ import {
   updateMeal,
   uploadMealImage,
   suggestMealDetails,
-  importFromYouTube,
+  importFromVideo,
   suggestMealImages,
-  type YouTubeImport,
+  type VideoImport,
 } from "@/app/(app)/library/actions";
 
 interface Props {
@@ -48,6 +49,8 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   meal?: MealView | null;
   cuisines: string[];
+  /** A link shared into the app: imported as soon as the dialog opens. */
+  initialVideoUrl?: string;
 }
 
 const empty = {
@@ -61,14 +64,20 @@ const empty = {
   recipeUrl: "",
 };
 
-export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
+export function MealFormDialog({
+  open,
+  onOpenChange,
+  meal,
+  cuisines,
+  initialVideoUrl,
+}: Props) {
   const [form, setForm] = useState(() => toForm(meal));
   const [lastMealId, setLastMealId] = useState(meal?.id ?? null);
   const [lastOpen, setLastOpen] = useState(open);
   const [pending, startTransition] = useTransition();
   const [uploading, setUploading] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
-  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
   const [importing, setImporting] = useState(false);
   const [imageOptions, setImageOptions] = useState<{
     query: string;
@@ -78,10 +87,13 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
   const [cyclingImage, setCyclingImage] = useState(false);
   // Set when a video turned out to hold several recipes: the dialog then walks
   // through them one at a time instead of editing a single draft.
-  const [queue, setQueue] = useState<YouTubeImport[] | null>(null);
+  const [queue, setQueue] = useState<VideoImport[] | null>(null);
   const [queueIndex, setQueueIndex] = useState(0);
   const [queueAdded, setQueueAdded] = useState(0);
+  // Shown when the source named a dish but never spelled the recipe out.
+  const [missingRecipe, setMissingRecipe] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const autoImported = useRef<string | null>(null);
 
   // Reset on every open, not just when the target changes: adding two meals
   // in a row leaves the target id null both times. Skipping the reset on close
@@ -92,13 +104,25 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
     setLastMealId(mealId);
     if (open) {
       setForm(toForm(meal));
-      setYoutubeUrl("");
+      setVideoUrl("");
       setImageOptions(null);
       setQueue(null);
       setQueueIndex(0);
       setQueueAdded(0);
+      setMissingRecipe(false);
     }
   }
+
+  // A link shared from TikTok or YouTube should import itself — the point of
+  // sharing is not having to press anything. Guarded by the URL so the import
+  // runs once per shared link rather than on every re-render.
+  useEffect(() => {
+    if (!open || !initialVideoUrl) return;
+    if (autoImported.current === initialVideoUrl) return;
+    autoImported.current = initialVideoUrl;
+    void runImport(initialVideoUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialVideoUrl]);
 
   const isEdit = !!meal;
   const review = queue
@@ -142,13 +166,14 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
   }
 
   /** Loads the recipes of a multi-recipe video into the review queue. */
-  function startReview(imports: YouTubeImport[]) {
+  function startReview(imports: VideoImport[]) {
     setQueue(imports);
     setQueueIndex(0);
     setQueueAdded(0);
     setForm(importToForm(imports[0]));
     setImageOptions(null);
-    setYoutubeUrl("");
+    setVideoUrl("");
+    setMissingRecipe(imports[0].needsRecipe);
     toast.success(
       `Found ${imports.length} recipes in that video. Review them one by one.`
     );
@@ -169,6 +194,7 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
     setQueueAdded(addedSoFar);
     setForm(importToForm(queue[next]));
     setImageOptions(null);
+    setMissingRecipe(queue[next].needsRecipe);
   }
 
   function endReview(added: number, total: number) {
@@ -248,14 +274,18 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
     }
   }
 
-  async function handleYoutubeImport() {
-    const url = youtubeUrl.trim();
+  async function handleVideoImport() {
+    const url = videoUrl.trim();
     if (!url) {
-      toast.error("Paste a YouTube link first.");
+      toast.error("Paste a YouTube or TikTok link first.");
       return;
     }
+    await runImport(url);
+  }
+
+  async function runImport(url: string) {
     setImporting(true);
-    const res = await importFromYouTube(url);
+    const res = await importFromVideo(url);
     setImporting(false);
 
     if (!res.ok || !res.imports?.length) {
@@ -279,7 +309,8 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
   }
 
   /** Fills the blanks in the current draft, leaving anything typed in place. */
-  function fillFromImport(s: YouTubeImport) {
+  function fillFromImport(s: VideoImport) {
+    setMissingRecipe(s.needsRecipe);
     const filled: string[] = [];
     setForm((f) => {
       const next = { ...f };
@@ -320,6 +351,10 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
 
     if (filled.length === 0) {
       toast.info("Nothing new to fill — your fields are already set.");
+    } else if (s.needsRecipe) {
+      toast.info(
+        `Imported ${filled.join(", ")}. The caption didn't include the recipe, so add the ingredients and steps yourself.`
+      );
     } else {
       toast.success(`Imported ${filled.join(", ")}. Review before saving.`);
     }
@@ -415,30 +450,30 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
 
           {!review && (
             <div className="space-y-2 rounded-lg border bg-muted/40 p-3">
-              <Label htmlFor="youtube" className="flex items-center gap-1.5">
-                <Clapperboard className="h-4 w-4 text-red-600" /> Import from
-                YouTube
+              <Label htmlFor="video" className="flex items-center gap-1.5">
+                <Clapperboard className="h-4 w-4 text-red-600" /> Import from a
+                video
               </Label>
               <div className="flex gap-2">
                 <Input
-                  id="youtube"
+                  id="video"
                   type="url"
                   inputMode="url"
-                  value={youtubeUrl}
-                  onChange={(e) => setYoutubeUrl(e.target.value)}
-                  placeholder="Paste a recipe video or Short link"
+                  value={videoUrl}
+                  onChange={(e) => setVideoUrl(e.target.value)}
+                  placeholder="Paste a YouTube or TikTok link"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      if (!importing) handleYoutubeImport();
+                      if (!importing) handleVideoImport();
                     }
                   }}
                 />
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={handleYoutubeImport}
-                  disabled={importing || youtubeUrl.trim().length === 0}
+                  onClick={handleVideoImport}
+                  disabled={importing || videoUrl.trim().length === 0}
                   className="shrink-0"
                 >
                   {importing ? (
@@ -450,9 +485,20 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Transcribes the video and fills in the recipe. Longer videos
-                take a few seconds. Only empty fields are filled, and videos
-                with several recipes are reviewed one at a time.
+                YouTube videos are transcribed; TikToks are read from their
+                caption. Only empty fields are filled, and videos with several
+                recipes are reviewed one at a time.
+              </p>
+            </div>
+          )}
+
+          {missingRecipe && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <p>
+                This one only gave us the dish, not the recipe — the creator
+                kept it in the video or behind a link. Everything else is filled
+                in; add the ingredients and steps to save it.
               </p>
             </div>
           )}
@@ -685,7 +731,7 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
 }
 
 /** A queued recipe becomes the whole draft, unlike a fill-the-blanks import. */
-function importToForm(s: YouTubeImport) {
+function importToForm(s: VideoImport) {
   return {
     name: s.title,
     diet: s.diet ?? empty.diet,
