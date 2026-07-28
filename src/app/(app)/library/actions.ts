@@ -182,12 +182,19 @@ export async function importFromYouTube(
         ? thumbnail || (title ? await fetchUnsplashImage(title) : "")
         : (title ? await fetchUnsplashImage(title) : "") || thumbnail;
 
+      // With several dishes in one video, the link should land on the dish
+      // itself. A single dish starts where the video does, so it needs no cue.
+      const recipeUrl =
+        !single && recipe.startSeconds
+          ? `${parsed.url}&t=${recipe.startSeconds}s`
+          : parsed.url;
+
       return {
         title,
         imageUrl,
         ingredients: recipe.ingredients,
         recipe: recipe.instructions,
-        recipeUrl: parsed.url,
+        recipeUrl,
         cuisine: recipe.cuisine || inferCuisine(title),
         diet: recipe.diet ?? inferDiet(title),
         mealTypes: recipe.mealTypes,
