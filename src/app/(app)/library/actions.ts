@@ -232,7 +232,6 @@ export async function createMeal(input: MealInput): Promise<ActionResult> {
 
   revalidatePath("/library");
   revalidatePath("/planner");
-  revalidatePath("/dashboard");
   return { ok: true };
 }
 
@@ -270,7 +269,6 @@ export async function updateMeal(
 
   revalidatePath("/library");
   revalidatePath("/planner");
-  revalidatePath("/dashboard");
   return { ok: true };
 }
 
@@ -285,7 +283,6 @@ export async function deleteMeal(id: string): Promise<ActionResult> {
 
   revalidatePath("/library");
   revalidatePath("/planner");
-  revalidatePath("/dashboard");
   return { ok: true };
 }
 

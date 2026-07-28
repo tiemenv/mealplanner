@@ -74,7 +74,7 @@ export async function generatePlan(
     { upsert: true, returnDocument: "after" }
   ).lean()) as MealPlanDoc;
 
-  revalidatePath("/dashboard");
+  revalidatePath("/planner");
   return { ok: true, plan: serializeMealPlan(doc) };
 }
 
@@ -103,7 +103,7 @@ async function mutatePlan(
     { returnDocument: "after" }
   ).lean()) as MealPlanDoc;
 
-  revalidatePath("/dashboard");
+  revalidatePath("/planner");
   return { ok: true, plan: serializeMealPlan(doc) };
 }
 

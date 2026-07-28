@@ -16,7 +16,6 @@ export interface ActionResult {
 
 function revalidateAll() {
   revalidatePath("/group");
-  revalidatePath("/dashboard");
   revalidatePath("/library");
   revalidatePath("/planner");
 }
