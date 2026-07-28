@@ -6,8 +6,9 @@ import { ShareImport } from "@/components/library/share-import";
 
 export const dynamic = "force-dynamic";
 
-/** Share sheets rarely hand over a bare URL: TikTok sends the link wrapped in
- *  the creator's caption, so the link has to be picked out of the text. */
+/** Share sheets rarely hand over a bare URL: TikTok and Instagram send the
+ *  link wrapped in the creator's caption, so it has to be picked out of the
+ *  text. */
 function findSharedUrl(...values: (string | string[] | undefined)[]): string {
   for (const value of values) {
     const text = Array.isArray(value) ? value.join(" ") : value;

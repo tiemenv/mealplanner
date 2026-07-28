@@ -1,12 +1,4 @@
 import "server-only";
-import { google } from "@ai-sdk/google";
-import { generateText, Output } from "ai";
-import {
-  extractionSchema,
-  normalizeExtraction,
-  CAPTION_PROMPT,
-  type RecipeExtraction,
-} from "@/lib/recipe-extraction";
 
 /** oEmbed resolves by video id alone, but the handle is kept so the meal links
  *  back to a URL a person would recognize. */
@@ -105,20 +97,4 @@ export async function fetchTikTokPost(url: string): Promise<TikTokPost | null> {
   } catch {
     return null;
   }
-}
-
-/** Reads recipes straight out of the caption. Cheap enough to always try first,
- *  but it only pays off when the creator wrote the recipe out. */
-export async function extractRecipesFromCaption(
-  caption: string
-): Promise<RecipeExtraction> {
-  const { output } = await generateText({
-    model: google("gemini-2.5-flash"),
-    output: Output.object({ schema: extractionSchema }),
-    messages: [
-      { role: "user", content: `${CAPTION_PROMPT}\n\nCaption:\n"""\n${caption}\n"""` },
-    ],
-  });
-
-  return normalizeExtraction(output);
 }

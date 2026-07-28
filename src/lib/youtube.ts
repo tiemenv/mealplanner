@@ -8,6 +8,10 @@ import {
   type RecipeExtraction,
 } from "@/lib/recipe-extraction";
 
+/** Gemini is the only provider that ingests a YouTube URL directly rather than
+ *  needing the file, so watching a video keeps us here whatever else changes. */
+const VIDEO_MODEL = "gemini-3.6-flash";
+
 /** Validates a YouTube URL (watch, youtu.be, shorts, embed) and returns a
  *  normalized canonical watch URL, or null if it isn't a YouTube link. */
 export function parseYouTubeUrl(input: string): { id: string; url: string } | null {
@@ -72,7 +76,7 @@ export async function extractRecipesFromYouTube(
   url: string
 ): Promise<RecipeExtraction> {
   const { output } = await generateText({
-    model: google("gemini-2.5-flash"),
+    model: google(VIDEO_MODEL),
     // Lower media resolution keeps token cost down for longer videos while
     // preserving audio transcription quality.
     providerOptions: {

@@ -19,10 +19,11 @@ Build a library of your meals (tagged by diet, meal type and cuisine), then auto
   - **lock** slots you like, **shuffle** a single slot, **swap** in a specific meal, or **clear** a slot
   - browse and plan any week (past / future)
 - **Groups** — create one shared workspace, **invite members by email**, accept/decline invites, manage members. While in a group you use the **shared** library and plans (personal mode otherwise; one group at a time).
+- **Collections** — ready-made sets of meals anyone can browse and import, either whole or dish by dish. Imports skip anything already in your library. Curating collections is gated behind a **creator** role (see below).
 
 ## Tech / architecture
 
-- `src/models/*` — Mongoose models (`UserProfile`, `Group`, `Invite`, `Meal`, `MealPlan`).
+- `src/models/*` — Mongoose models (`UserProfile`, `Group`, `Invite`, `Meal`, `MealPlan`, `Collection`).
 - `src/lib/workspace.ts` — resolves the signed-in user and their **active workspace** (`user:<clerkId>` or `group:<groupId>`). All meals and plans are keyed by this `ownerKey`, so switching between personal and group context is automatic.
 - `src/lib/generate.ts` — pure meal-plan generation (veg ratio + variety) and single-slot regeneration.
 - Mutations use **server actions** (`src/app/(app)/**/actions.ts`); pages are server components.
@@ -56,6 +57,35 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
+
+### 4. Give yourself the creator role (optional)
+
+Curating collections is limited to users with a `creator` role. The role lives in Clerk's `publicMetadata`, which only the backend can write, and is mirrored into the session token so the app can read it without an API call on every request.
+
+1. **Set the role.** [Clerk dashboard](https://dashboard.clerk.com) → **Users** → your user → **Metadata** → **Public** → **Edit**, then save:
+
+   ```json
+   { "role": "creator" }
+   ```
+
+2. **Put it in the session token.** Clerk dashboard → **Sessions** → **Customize session token** → **Edit**, then save the following. If you already have custom claims, merge this into them:
+
+   ```json
+   { "metadata": "{{user.public_metadata}}" }
+   ```
+
+3. **Sign out and back in**, so a token containing the new claim is issued.
+
+You should now see **New collection** on `/collections` and a **My collections** page. Without the role those routes redirect back to the public collection list.
+
+To grant the role from code instead (for example from a webhook or an internal action):
+
+```ts
+const client = await clerkClient();
+await client.users.updateUserMetadata(userId, {
+  publicMetadata: { role: "creator" },
+});
+```
 
 ## Deploying to Vercel
 

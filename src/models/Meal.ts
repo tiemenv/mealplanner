@@ -21,6 +21,11 @@ const MealSchema = new Schema(
     ingredients: { type: [String], default: [] },
     recipe: { type: String, default: "" },
     recipeUrl: { type: String, default: "" },
+    // Where a meal came from, when it came from a curated collection. Kept so
+    // the catalog can mark what is already in the library and so re-importing
+    // a collection adds nothing twice. Empty for hand-added meals.
+    sourceCollection: { type: String, default: "" },
+    sourceMealKey: { type: String, default: "" },
     createdByClerkId: { type: String, required: true },
   },
   { timestamps: true }

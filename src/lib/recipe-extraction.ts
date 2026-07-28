@@ -1,4 +1,6 @@
 import "server-only";
+import { google } from "@ai-sdk/google";
+import { generateText, Output } from "ai";
 import { z } from "zod";
 import { MEAL_TYPES, type Diet, type MealType } from "@/lib/constants";
 
@@ -22,6 +24,8 @@ export interface RecipeExtraction {
 /** Compilation videos are real, but a model that mistakes every component of
  *  one recipe for a dish of its own would flood the library. */
 const MAX_RECIPES = 12;
+
+const CAPTION_MODEL = "gemini-3.5-flash-lite";
 
 const recipeSchema = z.object({
   title: z
@@ -135,4 +139,26 @@ export function normalizeExtraction(output: ExtractionOutput): RecipeExtraction 
  *  import has to fall back to the video instead of saving a hollow meal. */
 export function isRecipeComplete(recipe: ExtractedRecipe): boolean {
   return recipe.ingredients.length > 0 && recipe.instructions.length > 0;
+}
+
+/** Reads recipes straight out of a post's caption. Shared by TikTok and
+ *  Instagram, where creators routinely write the whole recipe out: it costs a
+ *  fraction of watching the video and returns in a second or two. */
+export async function extractRecipesFromCaption(
+  caption: string
+): Promise<RecipeExtraction> {
+  const { output } = await generateText({
+    // Reading a caption is plain text extraction, and the small model measured
+    // identical to the larger ones on real captions at a fraction of the wait.
+    model: google(CAPTION_MODEL),
+    output: Output.object({ schema: extractionSchema }),
+    messages: [
+      {
+        role: "user",
+        content: `${CAPTION_PROMPT}\n\nCaption:\n"""\n${caption}\n"""`,
+      },
+    ],
+  });
+
+  return normalizeExtraction(output);
 }

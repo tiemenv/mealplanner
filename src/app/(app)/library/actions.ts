@@ -25,10 +25,17 @@ import {
   parseTikTokUrl,
   resolveTikTokUrl,
   fetchTikTokPost,
-  extractRecipesFromCaption,
   type TikTokLink,
 } from "@/lib/tiktok";
-import { isRecipeComplete } from "@/lib/recipe-extraction";
+import {
+  parseInstagramUrl,
+  fetchInstagramPost,
+  type InstagramLink,
+} from "@/lib/instagram";
+import {
+  extractRecipesFromCaption,
+  isRecipeComplete,
+} from "@/lib/recipe-extraction";
 
 export interface MealInput {
   name: string;
@@ -106,7 +113,7 @@ export interface VideoImport {
   cuisine: string;
   diet: Diet | null;
   mealTypes: MealType[];
-  source: "youtube" | "tiktok";
+  source: "youtube" | "tiktok" | "instagram";
   /** The source named a dish but never said how to cook it, so the draft
    *  arrives with everything except the ingredients and the steps. */
   needsRecipe: boolean;
@@ -135,10 +142,13 @@ export async function importFromVideo(
   const tiktok = parseTikTokUrl(rawUrl);
   if (tiktok) return importTikTok(tiktok);
 
+  const instagram = parseInstagramUrl(rawUrl);
+  if (instagram) return importInstagram(instagram);
+
   const youtube = parseYouTubeUrl(rawUrl);
   if (youtube) return importYouTube(youtube);
 
-  return { ok: false, error: "Enter a YouTube or TikTok link." };
+  return { ok: false, error: "Enter a YouTube, TikTok or Instagram link." };
 }
 
 async function importYouTube(parsed: {
@@ -230,9 +240,6 @@ async function importYouTube(parsed: {
   return { ok: true, imports };
 }
 
-/** TikTok recipes usually live in the caption, which is free to read and far
- *  quicker than watching the video. Captions that only name the dish still
- *  yield a head start: a title, a cover photo, cuisine and diet. */
 async function importTikTok(link: TikTokLink): Promise<VideoImportResult> {
   const resolved = await resolveTikTokUrl(link);
   if (!resolved) {
@@ -250,22 +257,77 @@ async function importTikTok(link: TikTokLink): Promise<VideoImportResult> {
     return { ok: false, error: "That TikTok has no caption to read." };
   }
 
+  return importCaption({
+    source: "tiktok",
+    noun: "TikTok",
+    id: resolved.id,
+    url: resolved.url,
+    caption: post.caption,
+    thumbnailUrl: post.thumbnailUrl,
+  });
+}
+
+async function importInstagram(
+  link: InstagramLink
+): Promise<VideoImportResult> {
+  const post = await fetchInstagramPost(link.url);
+  if (!post) {
+    return {
+      ok: false,
+      error: "Couldn't read that Reel. It may be private or removed.",
+    };
+  }
+  if (!post.caption) {
+    return { ok: false, error: "That Reel has no caption to read." };
+  }
+
+  return importCaption({
+    source: "instagram",
+    noun: "Reel",
+    id: link.code,
+    url: link.url,
+    caption: post.caption,
+    thumbnailUrl: post.thumbnailUrl,
+  });
+}
+
+interface CaptionSource {
+  source: "tiktok" | "instagram";
+  /** What to call the post when telling the reader something went wrong. */
+  noun: string;
+  id: string;
+  url: string;
+  caption: string;
+  thumbnailUrl: string;
+}
+
+/** TikTok and Instagram recipes usually live in the caption, which is free to
+ *  read and far quicker than watching the video. Captions that only name the
+ *  dish still yield a head start: a title, a cover photo, cuisine and diet. */
+async function importCaption({
+  source,
+  noun,
+  id,
+  url,
+  caption,
+  thumbnailUrl,
+}: CaptionSource): Promise<VideoImportResult> {
   const startedAt = Date.now();
   console.log(
-    `[tiktok-import] start ${JSON.stringify({
-      video: resolved.id,
-      caption: post.caption.length,
+    `[${source}-import] start ${JSON.stringify({
+      post: id,
+      caption: caption.length,
     })}`
   );
 
   let extraction;
   try {
-    extraction = await extractRecipesFromCaption(post.caption);
+    extraction = await extractRecipesFromCaption(caption);
   } catch (error) {
     const failure = describeImportFailure(error);
     console.error(
-      `[tiktok-import] failed ${JSON.stringify({
-        video: resolved.id,
+      `[${source}-import] failed ${JSON.stringify({
+        post: id,
         ms: Date.now() - startedAt,
         ...failure,
       })}`
@@ -275,13 +337,13 @@ async function importTikTok(link: TikTokLink): Promise<VideoImportResult> {
       error:
         failure.kind === "quota"
           ? "Imports are busy right now. Try again in a minute."
-          : "Couldn't read that TikTok.",
+          : `Couldn't read that ${noun}.`,
     };
   }
 
   console.log(
-    `[tiktok-import] done ${JSON.stringify({
-      video: resolved.id,
+    `[${source}-import] done ${JSON.stringify({
+      post: id,
       ms: Date.now() - startedAt,
       isRecipe: extraction.isRecipe,
       recipes: extraction.recipes.length,
@@ -290,13 +352,13 @@ async function importTikTok(link: TikTokLink): Promise<VideoImportResult> {
   );
 
   if (!extraction.isRecipe) {
-    return { ok: false, error: "That TikTok doesn't seem to be a recipe." };
+    return { ok: false, error: `That ${noun} doesn't seem to be a recipe.` };
   }
 
   const single = extraction.recipes.length === 1;
   // Copied at most once, and only if a dish actually ends up using it.
   let cover: Promise<string> | null = null;
-  const coverImage = () => (cover ??= persistCoverImage(post.thumbnailUrl));
+  const coverImage = () => (cover ??= persistCoverImage(thumbnailUrl, source));
 
   const imports = await Promise.all(
     extraction.recipes.map(async (recipe) => {
@@ -312,13 +374,13 @@ async function importTikTok(link: TikTokLink): Promise<VideoImportResult> {
         imageUrl,
         ingredients: recipe.ingredients,
         recipe: recipe.instructions,
-        // TikTok has no equivalent of YouTube's &t=, so every dish in a
-        // compilation links to the same place.
-        recipeUrl: resolved.url,
+        // Neither platform has an equivalent of YouTube's &t=, so every dish
+        // in a compilation links to the same place.
+        recipeUrl: url,
         cuisine: recipe.cuisine || inferCuisine(title),
         diet: recipe.diet ?? inferDiet(title),
         mealTypes: recipe.mealTypes,
-        source: "tiktok" as const,
+        source,
         needsRecipe: !isRecipeComplete(recipe),
       };
     })
@@ -327,16 +389,19 @@ async function importTikTok(link: TikTokLink): Promise<VideoImportResult> {
   return { ok: true, imports };
 }
 
-/** TikTok cover URLs are signed and stop working within days, so the bytes are
- *  copied into Blob storage. Without a store configured the original URL is
- *  still better than no picture, it just won't last. */
-async function persistCoverImage(url: string): Promise<string> {
+/** TikTok and Instagram cover URLs are signed and stop working within days, so
+ *  the bytes are copied into Blob storage. Without a store configured the
+ *  original URL is still better than no picture, it just won't last. */
+async function persistCoverImage(
+  url: string,
+  source: string
+): Promise<string> {
   if (!url) return "";
   if (!process.env.BLOB_READ_WRITE_TOKEN) return url;
   try {
     const res = await fetch(url);
     if (!res.ok) return "";
-    const blob = await put(`meals/tiktok-${Date.now()}.jpg`, await res.blob(), {
+    const blob = await put(`meals/${source}-${Date.now()}.jpg`, await res.blob(), {
       access: "public",
       addRandomSuffix: true,
       contentType: res.headers.get("content-type") ?? "image/jpeg",

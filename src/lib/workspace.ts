@@ -29,6 +29,8 @@ export interface Session {
   workspace: Workspace;
   /** Clerk user ID of the admin impersonating this user, or null. */
   impersonatedBy: string | null;
+  /** May curate meal collections for other people to import. */
+  isCreator: boolean;
 }
 
 /**
@@ -37,7 +39,10 @@ export interface Session {
  * workspace (personal or group).
  */
 export async function getSession(): Promise<Session> {
-  const [user, { actor }] = await Promise.all([currentUser(), auth()]);
+  const [user, { actor, sessionClaims }] = await Promise.all([
+    currentUser(),
+    auth(),
+  ]);
   if (!user) {
     throw new Error("Not authenticated");
   }
@@ -114,6 +119,7 @@ export async function getSession(): Promise<Session> {
     profile,
     workspace,
     impersonatedBy: actor?.sub ?? null,
+    isCreator: sessionClaims?.metadata?.role === "creator",
   };
 }
 

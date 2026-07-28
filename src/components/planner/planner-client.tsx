@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -581,9 +582,17 @@ function EmptyMeals() {
       <CalendarRange className="mb-3 h-10 w-10 text-muted-foreground" />
       <p className="font-medium">Your library is empty</p>
       <p className="mb-4 text-sm text-muted-foreground">
-        Add meals to your library before generating a plan.
+        A plan is built from your meals, so pick up a collection to start with
+        or add a few of your own.
       </p>
-      <Button render={<a href="/library" />}>Go to library</Button>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button render={<Link href="/collections" />}>
+          <Sparkles className="mr-2 h-4 w-4" /> Browse collections
+        </Button>
+        <Button variant="outline" render={<a href="/library" />}>
+          Go to library
+        </Button>
+      </div>
     </div>
   );
 }

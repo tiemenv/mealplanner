@@ -113,8 +113,8 @@ export function MealFormDialog({
     }
   }
 
-  // A link shared from TikTok or YouTube should import itself — the point of
-  // sharing is not having to press anything. Guarded by the URL so the import
+  // A shared link should import itself — the point of sharing is not having
+  // to press anything. Guarded by the URL so the import
   // runs once per shared link rather than on every re-render.
   useEffect(() => {
     if (!open || !initialVideoUrl) return;
@@ -277,7 +277,7 @@ export function MealFormDialog({
   async function handleVideoImport() {
     const url = videoUrl.trim();
     if (!url) {
-      toast.error("Paste a YouTube or TikTok link first.");
+      toast.error("Paste a YouTube, TikTok or Instagram link first.");
       return;
     }
     await runImport(url);
@@ -353,7 +353,7 @@ export function MealFormDialog({
       toast.info("Nothing new to fill — your fields are already set.");
     } else if (s.needsRecipe) {
       toast.info(
-        `Imported ${filled.join(", ")}. The caption didn't include the recipe, so add the ingredients and steps yourself.`
+        `Imported ${filled.join(", ")}. The caption stopped short of the full recipe, so fill in the rest yourself.`
       );
     } else {
       toast.success(`Imported ${filled.join(", ")}. Review before saving.`);
@@ -408,6 +408,14 @@ export function MealFormDialog({
     }
   }
 
+  // A thin caption can still list the ingredients and leave out the method, so
+  // the warning names whichever half is actually blank — and disappears once
+  // it has been typed in.
+  const missingParts = [
+    !form.ingredients.trim() && "ingredients",
+    !form.recipe.trim() && "steps",
+  ].filter(Boolean) as string[];
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
@@ -461,7 +469,7 @@ export function MealFormDialog({
                   inputMode="url"
                   value={videoUrl}
                   onChange={(e) => setVideoUrl(e.target.value)}
-                  placeholder="Paste a YouTube or TikTok link"
+                  placeholder="Paste a YouTube, TikTok or Instagram link"
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
@@ -485,20 +493,20 @@ export function MealFormDialog({
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                YouTube videos are transcribed; TikToks are read from their
-                caption. Only empty fields are filled, and videos with several
-                recipes are reviewed one at a time.
+                YouTube videos are transcribed; TikToks and Reels are read from
+                their caption. Only empty fields are filled, and videos with
+                several recipes are reviewed one at a time.
               </p>
             </div>
           )}
 
-          {missingRecipe && (
+          {missingRecipe && missingParts.length > 0 && (
             <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
               <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
               <p>
-                This one only gave us the dish, not the recipe — the creator
-                kept it in the video or behind a link. Everything else is filled
-                in; add the ingredients and steps to save it.
+                The caption never spells out the {missingParts.join(" or the ")}{" "}
+                — the creator kept that in the video or behind a link.
+                Everything else is filled in; add the rest to save it.
               </p>
             </div>
           )}

@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Search, UtensilsCrossed } from "lucide-react";
+import Link from "next/link";
+import { Plus, Search, Sparkles, UtensilsCrossed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -136,13 +137,18 @@ export function LibraryClient({
           </p>
           <p className="mb-4 text-sm text-muted-foreground">
             {meals.length === 0
-              ? "Add your favourite meals to start planning."
+              ? "Start from a ready-made collection, or add your own."
               : "Try clearing a filter."}
           </p>
           {meals.length === 0 && (
-            <Button onClick={openAdd}>
-              <Plus className="mr-2 h-4 w-4" /> Add your first meal
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button render={<Link href="/collections" />}>
+                <Sparkles className="mr-2 h-4 w-4" /> Browse collections
+              </Button>
+              <Button variant="outline" onClick={openAdd}>
+                <Plus className="mr-2 h-4 w-4" /> Add your first meal
+              </Button>
+            </div>
           )}
         </div>
       ) : (

@@ -32,8 +32,9 @@ export default function manifest(): MetadataRoute.Manifest {
       },
     ],
     // Puts Mealmate in the phone's share sheet, so a recipe video can be sent
-    // straight here from TikTok or YouTube. TikTok shares the link inside the
-    // shared text rather than as a URL, which /import allows for.
+    // straight here from TikTok, Instagram or YouTube. TikTok and Instagram
+    // share the link inside the text rather than as a URL, which /import
+    // allows for.
     share_target: {
       action: "/import",
       method: "GET",
