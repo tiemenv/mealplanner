@@ -2,7 +2,7 @@ import "server-only";
 import { google } from "@ai-sdk/google";
 import { APICallError, RetryError, generateText, Output } from "ai";
 import { z } from "zod";
-import type { Diet } from "@/lib/constants";
+import { MEAL_TYPES, type Diet, type MealType } from "@/lib/constants";
 
 /** Validates a YouTube URL (watch, youtu.be, shorts, embed) and returns a
  *  normalized canonical watch URL, or null if it isn't a YouTube link. */
@@ -63,18 +63,25 @@ export async function fetchYouTubeThumbnail(id: string): Promise<string> {
 }
 
 export interface YouTubeRecipe {
-  isRecipe: boolean;
   title: string;
   ingredients: string[];
   instructions: string;
   cuisine: string;
   diet: Diet | null;
+  mealTypes: MealType[];
 }
 
+export interface YouTubeExtraction {
+  isRecipe: boolean;
+  /** One entry per dish taught in the video, in the order they appear. */
+  recipes: YouTubeRecipe[];
+}
+
+/** Compilation videos are real, but a model that mistakes every component of
+ *  one recipe for a dish of its own would flood the library. */
+const MAX_RECIPES = 12;
+
 const recipeSchema = z.object({
-  isRecipe: z
-    .boolean()
-    .describe("True only if the video actually demonstrates a cooking recipe."),
   title: z
     .string()
     .describe("Concise name of the dish being made (not the video's title)."),
@@ -83,26 +90,40 @@ const recipeSchema = z.object({
     .describe("Each ingredient with its quantity, e.g. '2 cups flour'."),
   instructions: z
     .string()
-    .describe("Numbered cooking steps, one per line."),
+    .describe("Numbered cooking steps for this dish, one per line."),
   cuisine: z
     .string()
     .describe("Cuisine of the dish, e.g. 'Italian'. Empty string if unclear."),
   diet: z
     .enum(["veg", "nonveg", "unknown"])
     .describe("'veg' if vegetarian, 'nonveg' if it contains meat/fish, else 'unknown'."),
+  mealTypes: z
+    .array(z.enum(MEAL_TYPES))
+    .describe("Meals of the day the dish suits. Pick every one that fits."),
 });
 
-const PROMPT = `You are a cooking assistant. Watch and listen to this recipe video (transcribe the narration and read any on-screen text) and extract the recipe.
-- Combine spoken instructions and on-screen captions into a complete ingredient list (with quantities) and clear numbered steps.
-- Give the dish a concise title (the food, not the video headline).
-- Infer the cuisine and whether the dish is vegetarian.
-- If the video is NOT a cooking/recipe video, set isRecipe to false and leave the other fields empty.`;
+const extractionSchema = z.object({
+  isRecipe: z
+    .boolean()
+    .describe(
+      "True only if the video actually demonstrates at least one cooking recipe."
+    ),
+  recipes: z
+    .array(recipeSchema)
+    .describe("One entry per distinct dish, in the order they are made."),
+});
 
-/** Sends the YouTube URL to Gemini and returns a structured recipe.
+const PROMPT = `You are a cooking assistant. Watch and listen to this cooking video (transcribe the narration and read any on-screen text) and extract every recipe it teaches.
+- Most videos make a single dish. Compilations ("5 easy dinners", a week of meal prep) make several — return one entry per dish, in the order they are made.
+- Only split when each dish stands on its own as a meal. The parts of one recipe — sauce, marinade, side, garnish, or a variation of the same dish — belong in that recipe's ingredients and steps, not in an entry of their own.
+- For each dish, combine spoken instructions and on-screen captions into a complete ingredient list (with quantities) and clear numbered steps, give it a concise title (the food, not the video headline), and infer its cuisine, whether it is vegetarian, and which meals of the day it suits.
+- If the video is NOT a cooking/recipe video, set isRecipe to false and return an empty recipes list.`;
+
+/** Sends the YouTube URL to Gemini and returns every recipe it found.
  *  Assumes GOOGLE_GENERATIVE_AI_API_KEY is set (checked by the caller). */
-export async function extractRecipeFromYouTube(
+export async function extractRecipesFromYouTube(
   url: string
-): Promise<YouTubeRecipe> {
+): Promise<YouTubeExtraction> {
   const { output } = await generateText({
     model: google("gemini-2.5-flash"),
     // Lower media resolution keeps token cost down for longer videos while
@@ -110,7 +131,7 @@ export async function extractRecipeFromYouTube(
     providerOptions: {
       google: { mediaResolution: "MEDIA_RESOLUTION_LOW" },
     },
-    output: Output.object({ schema: recipeSchema }),
+    output: Output.object({ schema: extractionSchema }),
     messages: [
       {
         role: "user",
@@ -122,16 +143,22 @@ export async function extractRecipeFromYouTube(
     ],
   });
 
-  return {
-    isRecipe: output.isRecipe,
-    title: output.title?.trim() ?? "",
-    ingredients: (output.ingredients ?? [])
-      .map((s) => s.trim())
-      .filter(Boolean),
-    instructions: output.instructions?.trim() ?? "",
-    cuisine: output.cuisine?.trim() ?? "",
-    diet: output.diet === "unknown" ? null : output.diet,
-  };
+  const recipes = (output.recipes ?? [])
+    .map((recipe) => ({
+      title: recipe.title?.trim() ?? "",
+      ingredients: (recipe.ingredients ?? [])
+        .map((s) => s.trim())
+        .filter(Boolean),
+      instructions: recipe.instructions?.trim() ?? "",
+      cuisine: recipe.cuisine?.trim() ?? "",
+      diet: recipe.diet === "unknown" ? null : recipe.diet,
+      mealTypes: [...new Set(recipe.mealTypes ?? [])],
+    }))
+    // An entry with no name and nothing to cook isn't worth reviewing.
+    .filter((r) => r.title || r.ingredients.length > 0 || r.instructions)
+    .slice(0, MAX_RECIPES);
+
+  return { isRecipe: output.isRecipe && recipes.length > 0, recipes };
 }
 
 /** Flat, log-friendly summary of why an import failed. Kept flat so each

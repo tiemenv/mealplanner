@@ -40,6 +40,7 @@ import {
   suggestMealDetails,
   importFromYouTube,
   suggestMealImages,
+  type YouTubeImport,
 } from "@/app/(app)/library/actions";
 
 interface Props {
@@ -75,6 +76,11 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
     index: number;
   } | null>(null);
   const [cyclingImage, setCyclingImage] = useState(false);
+  // Set when a video turned out to hold several recipes: the dialog then walks
+  // through them one at a time instead of editing a single draft.
+  const [queue, setQueue] = useState<YouTubeImport[] | null>(null);
+  const [queueIndex, setQueueIndex] = useState(0);
+  const [queueAdded, setQueueAdded] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Reset on every open, not just when the target changes: adding two meals
@@ -88,10 +94,16 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
       setForm(toForm(meal));
       setYoutubeUrl("");
       setImageOptions(null);
+      setQueue(null);
+      setQueueIndex(0);
+      setQueueAdded(0);
     }
   }
 
   const isEdit = !!meal;
+  const review = queue
+    ? { index: queueIndex, total: queue.length, added: queueAdded }
+    : null;
 
   function update<K extends keyof typeof form>(key: K, val: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: val }));
@@ -116,13 +128,66 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
       const res = isEdit
         ? await updateMeal(meal!.id, input)
         : await createMeal(input);
-      if (res.ok) {
-        toast.success(isEdit ? "Meal updated" : "Meal added");
-        onOpenChange(false);
-      } else {
+      if (!res.ok) {
         toast.error(res.error ?? "Something went wrong");
+        return;
       }
+      if (review) {
+        advanceReview(1);
+        return;
+      }
+      toast.success(isEdit ? "Meal updated" : "Meal added");
+      onOpenChange(false);
     });
+  }
+
+  /** Loads the recipes of a multi-recipe video into the review queue. */
+  function startReview(imports: YouTubeImport[]) {
+    setQueue(imports);
+    setQueueIndex(0);
+    setQueueAdded(0);
+    setForm(importToForm(imports[0]));
+    setImageOptions(null);
+    setYoutubeUrl("");
+    toast.success(
+      `Found ${imports.length} recipes in that video. Review them one by one.`
+    );
+  }
+
+  /** Moves to the next queued recipe, or wraps up if that was the last one. */
+  function advanceReview(added: number) {
+    if (!queue) return;
+    const total = queue.length;
+    const addedSoFar = queueAdded + added;
+    const next = queueIndex + 1;
+
+    if (next >= total) {
+      endReview(addedSoFar, total);
+      return;
+    }
+    setQueueIndex(next);
+    setQueueAdded(addedSoFar);
+    setForm(importToForm(queue[next]));
+    setImageOptions(null);
+  }
+
+  function endReview(added: number, total: number) {
+    if (added > 0) {
+      toast.success(
+        `Added ${added} of ${total} recipes from that video to your library.`
+      );
+    }
+    setQueue(null);
+    onOpenChange(false);
+  }
+
+  /** Closing mid-review abandons the recipes that are still queued. */
+  function handleOpenChange(next: boolean) {
+    if (!next && queue) {
+      endReview(queueAdded, queue.length);
+      return;
+    }
+    onOpenChange(next);
   }
 
   async function handleAutofill() {
@@ -193,12 +258,28 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
     const res = await importFromYouTube(url);
     setImporting(false);
 
-    if (!res.ok || !res.import) {
+    if (!res.ok || !res.imports?.length) {
       toast.error(res.error ?? "Couldn't import that video.");
       return;
     }
 
-    const s = res.import;
+    const imports = res.imports;
+    // A video can teach several dishes. When adding, walk through them one at
+    // a time; an edit has a single target, so only the first one can land.
+    if (imports.length > 1 && !isEdit) {
+      startReview(imports);
+      return;
+    }
+    if (imports.length > 1) {
+      toast.info(
+        `That video has ${imports.length} recipes — filling from the first one.`
+      );
+    }
+    fillFromImport(imports[0]);
+  }
+
+  /** Fills the blanks in the current draft, leaving anything typed in place. */
+  function fillFromImport(s: YouTubeImport) {
     const filled: string[] = [];
     setForm((f) => {
       const next = { ...f };
@@ -213,6 +294,10 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
       if (!next.cuisine && s.cuisine) {
         next.cuisine = s.cuisine;
         filled.push("cuisine");
+      }
+      if (next.mealTypes.length === 0 && s.mealTypes.length) {
+        next.mealTypes = s.mealTypes;
+        filled.push("meal types");
       }
       if (!next.ingredients.trim() && s.ingredients.length) {
         next.ingredients = s.ingredients.join("\n");
@@ -289,55 +374,88 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit meal" : "Add a meal"}</DialogTitle>
+          <DialogTitle>
+            {review
+              ? `Recipe ${review.index + 1} of ${review.total}`
+              : isEdit
+                ? "Edit meal"
+                : "Add a meal"}
+          </DialogTitle>
           <DialogDescription>
-            Tag it so the planner can build a balanced, varied week.
+            {review
+              ? `That video had ${review.total} recipes in it. Edit anything that looks off, then add this one or skip to the next.${
+                  review.added > 0 ? ` ${review.added} added so far.` : ""
+                }`
+              : "Tag it so the planner can build a balanced, varied week."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 py-2">
-          <div className="space-y-2 rounded-lg border bg-muted/40 p-3">
-            <Label htmlFor="youtube" className="flex items-center gap-1.5">
-              <Clapperboard className="h-4 w-4 text-red-600" /> Import from YouTube
-            </Label>
-            <div className="flex gap-2">
-              <Input
-                id="youtube"
-                type="url"
-                inputMode="url"
-                value={youtubeUrl}
-                onChange={(e) => setYoutubeUrl(e.target.value)}
-                placeholder="Paste a recipe video or Short link"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    if (!importing) handleYoutubeImport();
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleYoutubeImport}
-                disabled={importing || youtubeUrl.trim().length === 0}
-                className="shrink-0"
-              >
-                {importing ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Clapperboard className="mr-2 h-4 w-4" />
-                )}
-                Import
-              </Button>
+          {review && (
+            <div className="flex items-center gap-1.5">
+              {queue!.map((r, i) => (
+                <span
+                  key={`${r.title}-${i}`}
+                  title={r.title || `Recipe ${i + 1}`}
+                  className={cn(
+                    "h-1.5 flex-1 rounded-full",
+                    i < review.index
+                      ? "bg-primary/40"
+                      : i === review.index
+                        ? "bg-primary"
+                        : "bg-muted"
+                  )}
+                />
+              ))}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Transcribes the video and fills in the recipe. Longer videos take
-              a few seconds. Only empty fields are filled.
-            </p>
-          </div>
+          )}
+
+          {!review && (
+            <div className="space-y-2 rounded-lg border bg-muted/40 p-3">
+              <Label htmlFor="youtube" className="flex items-center gap-1.5">
+                <Clapperboard className="h-4 w-4 text-red-600" /> Import from
+                YouTube
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="youtube"
+                  type="url"
+                  inputMode="url"
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  placeholder="Paste a recipe video or Short link"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (!importing) handleYoutubeImport();
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleYoutubeImport}
+                  disabled={importing || youtubeUrl.trim().length === 0}
+                  className="shrink-0"
+                >
+                  {importing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Clapperboard className="mr-2 h-4 w-4" />
+                  )}
+                  Import
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Transcribes the video and fills in the recipe. Longer videos
+                take a few seconds. Only empty fields are filled, and videos
+                with several recipes are reviewed one at a time.
+              </p>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
@@ -529,21 +647,55 @@ export function MealFormDialog({ open, onOpenChange, meal, cuisines }: Props) {
         </div>
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={pending}
-          >
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={pending}>
-            {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isEdit ? "Save changes" : "Add meal"}
-          </Button>
+          {review ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => advanceReview(0)}
+                disabled={pending}
+              >
+                Skip this one
+              </Button>
+              <Button onClick={handleSubmit} disabled={pending}>
+                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {review.index + 1 === review.total
+                  ? "Add meal & finish"
+                  : "Add meal & next"}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={pending}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleSubmit} disabled={pending}>
+                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEdit ? "Save changes" : "Add meal"}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+/** A queued recipe becomes the whole draft, unlike a fill-the-blanks import. */
+function importToForm(s: YouTubeImport) {
+  return {
+    name: s.title,
+    diet: s.diet ?? empty.diet,
+    mealTypes: s.mealTypes,
+    cuisine: s.cuisine,
+    imageUrl: s.imageUrl,
+    ingredients: s.ingredients.join("\n"),
+    recipe: s.recipe,
+    recipeUrl: s.recipeUrl,
+  };
 }
 
 function toForm(meal?: MealView | null) {

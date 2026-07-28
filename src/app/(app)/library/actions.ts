@@ -18,7 +18,7 @@ import {
   parseYouTubeUrl,
   fetchYouTubeTitle,
   fetchYouTubeThumbnail,
-  extractRecipeFromYouTube,
+  extractRecipesFromYouTube,
   describeImportFailure,
 } from "@/lib/youtube";
 
@@ -97,12 +97,14 @@ export interface YouTubeImport {
   recipeUrl: string;
   cuisine: string;
   diet: Diet | null;
+  mealTypes: MealType[];
 }
 
 export interface YouTubeImportResult {
   ok: boolean;
   error?: string;
-  import?: YouTubeImport;
+  /** One draft per recipe found — compilation videos yield several. */
+  imports?: YouTubeImport[];
 }
 
 export async function importFromYouTube(
@@ -125,9 +127,9 @@ export async function importFromYouTube(
   const startedAt = Date.now();
   console.log(`[youtube-import] start ${JSON.stringify({ video: parsed.id })}`);
 
-  let recipe;
+  let extraction;
   try {
-    recipe = await extractRecipeFromYouTube(parsed.url);
+    extraction = await extractRecipesFromYouTube(parsed.url);
   } catch (error) {
     const failure = describeImportFailure(error);
     console.error(
@@ -153,36 +155,47 @@ export async function importFromYouTube(
     `[youtube-import] done ${JSON.stringify({
       video: parsed.id,
       ms: Date.now() - startedAt,
-      isRecipe: recipe.isRecipe,
+      isRecipe: extraction.isRecipe,
+      recipes: extraction.recipes.length,
     })}`
   );
 
-  if (!recipe.isRecipe) {
+  if (!extraction.isRecipe) {
     return {
       ok: false,
       error: "That video doesn't seem to be a recipe.",
     };
   }
 
-  const title = recipe.title || (await fetchYouTubeTitle(parsed.url));
-  // The video's own thumbnail shows the actual dish, so prefer it over a
-  // generic stock photo.
-  const image =
-    (await fetchYouTubeThumbnail(parsed.id)) ||
-    (title ? await fetchUnsplashImage(title) : "");
+  const single = extraction.recipes.length === 1;
+  const thumbnail = await fetchYouTubeThumbnail(parsed.id);
 
-  return {
-    ok: true,
-    import: {
-      title,
-      imageUrl: image,
-      ingredients: recipe.ingredients,
-      recipe: recipe.instructions,
-      recipeUrl: parsed.url,
-      cuisine: recipe.cuisine || inferCuisine(title),
-      diet: recipe.diet ?? inferDiet(title),
-    },
-  };
+  const imports = await Promise.all(
+    extraction.recipes.map(async (recipe) => {
+      // The oEmbed title describes the whole video, so it only stands in for a
+      // dish name when the video taught exactly one dish.
+      const title =
+        recipe.title || (single ? await fetchYouTubeTitle(parsed.url) : "");
+      // One dish per video means the thumbnail is a photo of that dish. With
+      // several it can only match one of them, so search per dish first.
+      const imageUrl = single
+        ? thumbnail || (title ? await fetchUnsplashImage(title) : "")
+        : (title ? await fetchUnsplashImage(title) : "") || thumbnail;
+
+      return {
+        title,
+        imageUrl,
+        ingredients: recipe.ingredients,
+        recipe: recipe.instructions,
+        recipeUrl: parsed.url,
+        cuisine: recipe.cuisine || inferCuisine(title),
+        diet: recipe.diet ?? inferDiet(title),
+        mealTypes: recipe.mealTypes,
+      };
+    })
+  );
+
+  return { ok: true, imports };
 }
 
 function validate(input: MealInput): string | null {
