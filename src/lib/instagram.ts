@@ -37,10 +37,20 @@ export interface InstagramPost {
   /** The creator's caption — often the entire recipe. */
   caption: string;
   authorName: string;
-  /** Cover image. Signed and short-lived, so copy the bytes rather than
-   *  storing this. */
-  thumbnailUrl: string;
+  /** Cover images, best first. Signed and short-lived, so copy the bytes
+   *  rather than storing these. */
+  thumbnailUrls: string[];
   url: string;
+}
+
+/** og:image for a Reel is composited with a play button painted over the
+ *  middle — its transform starts with "cmp1" — which looks like a mistake once
+ *  it is saved as a meal photo. This older endpoint redirects to the same
+ *  frame untouched, and larger (up to 1080px against og:image's 640), so it is
+ *  tried first. The signature is bound to the transform, so the overlay cannot
+ *  simply be edited out of the og:image URL. */
+function posterUrl(code: string): string {
+  return `https://www.instagram.com/p/${code}/media/?size=l`;
 }
 
 // Instagram decides what to serve by user agent: crawlers get the Open Graph
@@ -89,8 +99,9 @@ async function fetchPage(url: string, agent?: string): Promise<string> {
 /** Instagram's oEmbed carries no caption — Meta stripped the useful fields in
  *  2025 — so the post's own Open Graph tags are the source. */
 export async function fetchInstagramPost(
-  url: string
+  link: InstagramLink
 ): Promise<InstagramPost | null> {
+  const { url, code } = link;
   try {
     let html = await fetchPage(url);
     let title = readMeta(html, "og:title");
@@ -106,7 +117,9 @@ export async function fetchInstagramPost(
     return {
       caption,
       authorName,
-      thumbnailUrl: readMeta(html, "og:image"),
+      thumbnailUrls: [posterUrl(code), readMeta(html, "og:image")].filter(
+        Boolean
+      ),
       url,
     };
   } catch {

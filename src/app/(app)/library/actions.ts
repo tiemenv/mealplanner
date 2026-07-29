@@ -263,14 +263,14 @@ async function importTikTok(link: TikTokLink): Promise<VideoImportResult> {
     id: resolved.id,
     url: resolved.url,
     caption: post.caption,
-    thumbnailUrl: post.thumbnailUrl,
+    thumbnailUrls: [post.thumbnailUrl],
   });
 }
 
 async function importInstagram(
   link: InstagramLink
 ): Promise<VideoImportResult> {
-  const post = await fetchInstagramPost(link.url);
+  const post = await fetchInstagramPost(link);
   if (!post) {
     return {
       ok: false,
@@ -287,7 +287,7 @@ async function importInstagram(
     id: link.code,
     url: link.url,
     caption: post.caption,
-    thumbnailUrl: post.thumbnailUrl,
+    thumbnailUrls: post.thumbnailUrls,
   });
 }
 
@@ -298,7 +298,8 @@ interface CaptionSource {
   id: string;
   url: string;
   caption: string;
-  thumbnailUrl: string;
+  /** Cover candidates, best first. */
+  thumbnailUrls: string[];
 }
 
 /** TikTok and Instagram recipes usually live in the caption, which is free to
@@ -310,7 +311,7 @@ async function importCaption({
   id,
   url,
   caption,
-  thumbnailUrl,
+  thumbnailUrls,
 }: CaptionSource): Promise<VideoImportResult> {
   const startedAt = Date.now();
   console.log(
@@ -358,7 +359,7 @@ async function importCaption({
   const single = extraction.recipes.length === 1;
   // Copied at most once, and only if a dish actually ends up using it.
   let cover: Promise<string> | null = null;
-  const coverImage = () => (cover ??= persistCoverImage(thumbnailUrl, source));
+  const coverImage = () => (cover ??= persistCoverImage(thumbnailUrls, source));
 
   const imports = await Promise.all(
     extraction.recipes.map(async (recipe) => {
@@ -393,23 +394,36 @@ async function importCaption({
  *  the bytes are copied into Blob storage. Without a store configured the
  *  original URL is still better than no picture, it just won't last. */
 async function persistCoverImage(
-  url: string,
+  urls: string[],
   source: string
 ): Promise<string> {
-  if (!url) return "";
-  if (!process.env.BLOB_READ_WRITE_TOKEN) return url;
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return "";
-    const blob = await put(`meals/${source}-${Date.now()}.jpg`, await res.blob(), {
-      access: "public",
-      addRandomSuffix: true,
-      contentType: res.headers.get("content-type") ?? "image/jpeg",
-    });
-    return blob.url;
-  } catch {
-    return "";
+  const candidates = urls.filter(Boolean);
+  if (candidates.length === 0) return "";
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return candidates[0];
+
+  for (const url of candidates) {
+    try {
+      const res = await fetch(url);
+      const contentType = res.headers.get("content-type") ?? "";
+      // A removed or gated post answers with an HTML page rather than a
+      // picture, so the next candidate gets a turn.
+      if (!res.ok || !contentType.startsWith("image/")) continue;
+
+      const blob = await put(
+        `meals/${source}-${Date.now()}.jpg`,
+        await res.blob(),
+        {
+          access: "public",
+          addRandomSuffix: true,
+          contentType,
+        }
+      );
+      return blob.url;
+    } catch {
+      continue;
+    }
   }
+  return "";
 }
 
 function validate(input: MealInput): string | null {
