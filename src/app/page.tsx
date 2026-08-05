@@ -17,7 +17,7 @@ export default async function Home() {
           <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             🍳
           </span>
-          Mealmate
+          The Weekly Plate
         </div>
         <div className="flex items-center gap-2">
           <SignInButton mode="modal">

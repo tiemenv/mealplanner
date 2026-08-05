@@ -1,4 +1,4 @@
-# 🍳 Mealmate
+# 🍳 The Weekly Plate
 
 A weekly meal planner built with **Next.js (App Router)**, **MongoDB**, **Clerk**, **Tailwind CSS** and **shadcn/ui** — ready to deploy on **Vercel**.
 

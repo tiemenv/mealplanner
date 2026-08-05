@@ -17,10 +17,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Mealmate — Weekly Meal Planner",
+  title: "The Weekly Plate",
   description:
     "Build your meal library and auto-generate a varied, balanced weekly meal plan.",
-  appleWebApp: { capable: true, title: "Mealmate", statusBarStyle: "default" },
+  appleWebApp: {
+    capable: true,
+    title: "Weekly Plate",
+    statusBarStyle: "default",
+  },
   icons: { apple: "/icons/apple-touch-icon.png" },
 };
 

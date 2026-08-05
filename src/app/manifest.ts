@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Mealmate — Weekly Meal Planner",
-    short_name: "Mealmate",
+    name: "The Weekly Plate",
+    short_name: "Weekly Plate",
     description:
       "Build your meal library and auto-generate a varied, balanced weekly meal plan.",
     start_url: "/planner",
@@ -31,10 +31,10 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: "maskable",
       },
     ],
-    // Puts Mealmate in the phone's share sheet, so a recipe video can be sent
-    // straight here from TikTok, Instagram or YouTube. TikTok and Instagram
-    // share the link inside the text rather than as a URL, which /import
-    // allows for.
+    // Puts The Weekly Plate in the phone's share sheet, so a recipe video can
+    // be sent straight here from TikTok, Instagram or YouTube. TikTok and
+    // Instagram share the link inside the text rather than as a URL, which
+    // /import allows for.
     share_target: {
       action: "/import",
       method: "GET",
