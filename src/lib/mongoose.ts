@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+import { serverEnv } from "@/lib/env";
+
 /**
  * Cache the connection across hot-reloads in dev and across invocations in
  * serverless (Vercel) so we don't open a new connection on every request.
@@ -23,15 +25,8 @@ global._mongooseCache = cached;
 export async function dbConnect(): Promise<typeof mongoose> {
   if (cached.conn) return cached.conn;
 
-  const MONGODB_URI = process.env.MONGODB_URI;
-  if (!MONGODB_URI) {
-    throw new Error(
-      "Missing MONGODB_URI environment variable. Add it to .env.local"
-    );
-  }
-
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI, {
+    cached.promise = mongoose.connect(serverEnv.MONGODB_URI, {
       bufferCommands: false,
     });
   }

@@ -11,11 +11,14 @@
  * through the UI while signed in.
  *
  * Usage:
- *   npx tsx --conditions=react-server scripts/collection-check.ts
+ *   npx tsx --conditions=react-server scripts/collection-check.ts --db=weeklyplate_dev
  *
- * Everything it writes is scoped to scratch owner keys and deleted at the end.
+ * Everything it writes is scoped to scratch owner keys and deleted at the end,
+ * but it still writes, so `--db=` has to match the database in MONGODB_URI.
  */
 import { loadEnvConfig } from "@next/env";
+
+import { resolveTargetDatabase } from "./require-dev-database";
 
 loadEnvConfig(process.cwd());
 
@@ -39,6 +42,12 @@ function check(label: string, condition: boolean, detail?: unknown) {
 }
 
 async function main() {
+  const { databaseName } = resolveTargetDatabase(
+    process.argv.slice(2),
+    "npx tsx --conditions=react-server scripts/collection-check.ts"
+  );
+  console.log(`Checking against the "${databaseName}" database…`);
+
   const mongoose = (await import("mongoose")).default;
   const { dbConnect } = await import("../src/lib/mongoose");
   const { Meal } = await import("../src/models/Meal");

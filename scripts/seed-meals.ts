@@ -2,13 +2,16 @@
  * Seeds ~100 meals into a user's PERSONAL library, with ingredients, a recipe
  * link, and a best-effort image for each.
  *
+ * `--db=` is required and must match the database named in MONGODB_URI, so that
+ * seeding production takes more than a forgotten `.env.local`.
+ *
  * Usage:
- *   npm run seed                       # seed missing meals + backfill assets
- *   npm run seed -- <clerkUserId>      # seed a specific user
- *   npm run seed -- <clerkUserId> --wipe   # delete that user's meals first
- *   npm run seed -- --no-images        # skip image fetching (still sets data)
- *   npm run seed -- --refresh-images   # re-fetch images even if already set
- *   npm run seed -- --refresh-data     # re-set ingredients/recipe links too
+ *   npm run seed -- --db=weeklyplate_dev                  # seed missing meals + backfill assets
+ *   npm run seed -- --db=weeklyplate_dev <clerkUserId>    # seed a specific user
+ *   npm run seed -- --db=weeklyplate_dev <clerkUserId> --wipe  # delete that user's meals first
+ *   npm run seed -- --db=weeklyplate_dev --no-images      # skip image fetching (still sets data)
+ *   npm run seed -- --db=weeklyplate_dev --refresh-images # re-fetch images even if already set
+ *   npm run seed -- --db=weeklyplate_dev --refresh-data   # re-set ingredients/recipe links too
  *
  * Image methodology (best-effort, no API keys), in priority order:
  *   1. TheMealDB  — curated real photos for dishes in its database
@@ -19,6 +22,8 @@
  */
 import { loadEnvConfig } from "@next/env";
 import mongoose, { Schema } from "mongoose";
+
+import { resolveTargetDatabase } from "./require-dev-database";
 
 loadEnvConfig(process.cwd());
 
@@ -342,12 +347,9 @@ async function main() {
     args.find((a) => !a.startsWith("--")) || DEFAULT_CLERK_USER_ID;
   const ownerKey = `user:${clerkUserId}`;
 
-  const uri = process.env.MONGODB_URI;
-  if (!uri) {
-    throw new Error("MONGODB_URI is not set (check your .env / .env.local).");
-  }
+  const { uri, databaseName } = resolveTargetDatabase(args, "npm run seed --");
 
-  console.log(`Connecting to MongoDB…`);
+  console.log(`Connecting to the "${databaseName}" database…`);
   await mongoose.connect(uri);
   console.log(`Seeding meals for ${ownerKey}`);
 
