@@ -1,13 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { dbConnect } from "@/lib/mongoose";
 import { getSession } from "@/lib/workspace";
 import { Meal, type MealDoc } from "@/models/Meal";
 import { MealPlan, type MealPlanDoc } from "@/models/MealPlan";
 import { serializeMeal, serializeMealPlan } from "@/lib/serialize";
 import { generateWeek, regenerateSlot, sortSlots } from "@/lib/generate";
-import type { MealPlanView, SlotView } from "@/lib/types";
+import type { MealPlanView, MealView, SlotView } from "@/lib/types";
 import type { MealType } from "@/lib/constants";
 
 export interface PlanResult {
@@ -40,15 +39,13 @@ export async function generatePlan(
   await dbConnect();
   const ownerKey = session.workspace.ownerKey;
 
-  const meals = await loadMeals(ownerKey);
+  const [meals, existing] = await Promise.all([
+    loadMeals(ownerKey),
+    MealPlan.findOne({ ownerKey, weekStart }).lean() as Promise<MealPlanDoc | null>,
+  ]);
   if (meals.length === 0) {
     return { ok: false, error: "Add some meals to your library first." };
   }
-
-  const existing = (await MealPlan.findOne({
-    ownerKey,
-    weekStart,
-  }).lean()) as MealPlanDoc | null;
 
   const previous: SlotView[] = existing
     ? serializeMealPlan(existing).slots
@@ -74,27 +71,33 @@ export async function generatePlan(
     { upsert: true, returnDocument: "after" }
   ).lean()) as MealPlanDoc;
 
-  revalidatePath("/planner");
   return { ok: true, plan: serializeMealPlan(doc) };
 }
 
+/**
+ * Every plan edit returns the saved plan and the client renders that, so none of
+ * these actions revalidate /planner. Revalidating would re-run the layout and
+ * page on the server just to produce a plan the client already has, and it also
+ * marks every other visited page stale.
+ */
 async function mutatePlan(
   weekStart: string,
-  mutate: (slots: SlotView[], meals: ReturnType<typeof serializeMeal>[]) => SlotView[]
+  mutate: (slots: SlotView[], meals: MealView[]) => SlotView[],
+  /** Only slot regeneration picks a new meal; the rest just move ids around. */
+  options: { withMeals?: boolean } = {}
 ): Promise<PlanResult> {
   const session = await getSession();
   await dbConnect();
   const ownerKey = session.workspace.ownerKey;
 
-  const existing = (await MealPlan.findOne({
-    ownerKey,
-    weekStart,
-  }).lean()) as MealPlanDoc | null;
+  const [existing, meals] = await Promise.all([
+    MealPlan.findOne({ ownerKey, weekStart }).lean() as Promise<MealPlanDoc | null>,
+    options.withMeals ? loadMeals(ownerKey) : Promise.resolve([]),
+  ]);
   if (!existing) {
     return { ok: false, error: "Generate a plan first." };
   }
 
-  const meals = await loadMeals(ownerKey);
   const slots = mutate(serializeMealPlan(existing).slots, meals);
 
   const doc = (await MealPlan.findOneAndUpdate(
@@ -103,7 +106,6 @@ async function mutatePlan(
     { returnDocument: "after" }
   ).lean()) as MealPlanDoc;
 
-  revalidatePath("/planner");
   return { ok: true, plan: serializeMealPlan(doc) };
 }
 
@@ -112,12 +114,16 @@ export async function regenerateOneSlot(
   day: number,
   mealType: MealType
 ): Promise<PlanResult> {
-  return mutatePlan(weekStart, (slots, meals) => {
-    const slot = slots.find((s) => s.day === day && s.mealType === mealType);
-    // Locked and wildcard slots are both deliberate choices; leave them be.
-    if (slot?.locked || slot?.wildcard) return slots;
-    return regenerateSlot(slots, { day, mealType }, meals);
-  });
+  return mutatePlan(
+    weekStart,
+    (slots, meals) => {
+      const slot = slots.find((s) => s.day === day && s.mealType === mealType);
+      // Locked and wildcard slots are both deliberate choices; leave them be.
+      if (slot?.locked || slot?.wildcard) return slots;
+      return regenerateSlot(slots, { day, mealType }, meals);
+    },
+    { withMeals: true }
+  );
 }
 
 export async function setSlotMeal(

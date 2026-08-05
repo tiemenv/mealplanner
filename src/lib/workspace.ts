@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { dbConnect } from "@/lib/mongoose";
 import { UserProfile, type UserProfileDoc } from "@/models/UserProfile";
@@ -37,8 +38,12 @@ export interface Session {
  * Ensures a UserProfile exists for the signed-in Clerk user (creating/updating
  * it from Clerk data) and returns the full session including the active
  * workspace (personal or group).
+ *
+ * Wrapped in React's cache so the layout, the page and any server action in one
+ * request share a single result. Uncached it costs a Clerk API round trip and a
+ * profile upsert every time it is called, which the layout and page each do.
  */
-export async function getSession(): Promise<Session> {
+export const getSession = cache(async function getSession(): Promise<Session> {
   const [user, { actor, sessionClaims }] = await Promise.all([
     currentUser(),
     auth(),
@@ -121,7 +126,7 @@ export async function getSession(): Promise<Session> {
     impersonatedBy: actor?.sub ?? null,
     isCreator: sessionClaims?.metadata?.role === "creator",
   };
-}
+});
 
 /**
  * Guard for sensitive mutations: returns an error message when the current
