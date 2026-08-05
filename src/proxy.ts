@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 const isPublicRoute = createRouteMatcher([
   "/",
+  "/privacy",
   "/sign-in(.*)",
   "/sign-up(.*)",
   // Android TWA / Digital Asset Links — must be reachable without auth.

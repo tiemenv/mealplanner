@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { SignInButton, SignUpButton } from "@clerk/nextjs";
@@ -72,6 +73,15 @@ export default async function Home() {
           />
         </div>
       </section>
+
+      <footer className="border-t px-6 py-6 text-center text-sm text-muted-foreground">
+        <Link
+          href="/privacy"
+          className="hover:text-foreground underline underline-offset-4"
+        >
+          Privacy Policy
+        </Link>
+      </footer>
     </main>
   );
 }
