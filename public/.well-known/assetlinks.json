@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.theweeklyplate.www.twa",
+      "sha256_cert_fingerprints": [
+        "2F:94:8E:5B:4C:F7:80:68:05:42:45:65:C6:59:25:28:B8:90:00:BD:7D:81:53:4C:E5:B7:97:2C:88:6E:96:E1"
+      ]
+    }
+  }
+]

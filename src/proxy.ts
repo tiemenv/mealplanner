@@ -5,6 +5,8 @@ const isPublicRoute = createRouteMatcher([
   "/",
   "/sign-in(.*)",
   "/sign-up(.*)",
+  // Android TWA / Digital Asset Links — must be reachable without auth.
+  "/.well-known/assetlinks.json",
 ]);
 
 /** Collection authoring. Everything else under /collections is public to any
