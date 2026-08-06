@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { Pencil, Plus, Sparkles, UtensilsCrossed } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { MEAL_TYPE_LABELS } from "@/lib/constants";
 import type { MealType } from "@/lib/constants";
@@ -35,9 +34,9 @@ export function MyCollections({
             Sets of meals from your library, for other people to import.
           </p>
         </div>
-        <Button render={<Link href="/collections/new" />}>
+        <ButtonLink href="/collections/new">
           <Plus className="mr-2 h-4 w-4" /> New collection
-        </Button>
+        </ButtonLink>
       </div>
 
       {collections.length === 0 ? (
@@ -48,9 +47,9 @@ export function MyCollections({
             Group meals you already have into a collection — a cuisine, a week of
             dinners, whatever hangs together — and publish it.
           </p>
-          <Button render={<Link href="/collections/new" />}>
+          <ButtonLink href="/collections/new">
             <Plus className="mr-2 h-4 w-4" /> New collection
-          </Button>
+          </ButtonLink>
         </div>
       ) : (
         <div className="space-y-3">
@@ -103,14 +102,14 @@ export function MyCollections({
                 </p>
               </div>
 
-              <Button
+              <ButtonLink
                 variant="outline"
                 size="sm"
                 className="shrink-0"
-                render={<Link href={`/collections/${collection.slug}/edit`} />}
+                href={`/collections/${collection.slug}/edit`}
               >
                 <Pencil className="mr-2 h-4 w-4" /> Edit
-              </Button>
+              </ButtonLink>
             </Card>
           ))}
         </div>

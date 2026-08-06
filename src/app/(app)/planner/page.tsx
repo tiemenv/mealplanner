@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Mail } from "lucide-react";
 import { dbConnect } from "@/lib/mongoose";
 import { getSession } from "@/lib/workspace";
@@ -8,7 +7,7 @@ import { Invite } from "@/models/Invite";
 import { serializeMeal, serializeMealPlan } from "@/lib/serialize";
 import { getWeekStart } from "@/lib/week";
 import { PlannerClient } from "@/components/planner/planner-client";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
@@ -58,9 +57,9 @@ export default async function PlannerPage({
                 {inviteCount === 1 ? "invitation" : "invitations"}.
               </p>
             </div>
-            <Button size="sm" render={<Link href="/group" />}>
+            <ButtonLink size="sm" href="/group">
               View
-            </Button>
+            </ButtonLink>
           </CardContent>
         </Card>
       )}

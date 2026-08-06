@@ -1,9 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { Plus, Search, Sparkles, UtensilsCrossed } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -142,9 +141,9 @@ export function LibraryClient({
           </p>
           {meals.length === 0 && (
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Button render={<Link href="/collections" />}>
+              <ButtonLink href="/collections">
                 <Sparkles className="mr-2 h-4 w-4" /> Browse collections
-              </Button>
+              </ButtonLink>
               <Button variant="outline" onClick={openAdd}>
                 <Plus className="mr-2 h-4 w-4" /> Add your first meal
               </Button>
@@ -152,7 +151,7 @@ export function LibraryClient({
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 tablet:grid-cols-2 lg:grid-cols-3">
           {filtered.map((meal) => (
             <MealCard key={meal.id} meal={meal} onEdit={openEdit} />
           ))}

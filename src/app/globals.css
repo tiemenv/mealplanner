@@ -4,6 +4,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Touch devices never fire hover, so anything revealed by group-hover has to be
+   shown outright. `pointer: coarse` is the closest proxy for finger-not-mouse. */
+@custom-variant touch (@media (pointer: coarse));
+
+@theme {
+  /* 7" Android tablets report 600dp, just under Tailwind's 640px `sm`, so they
+     would otherwise get the single-column phone layout. Play requires 7" tablet
+     screenshots, making this the size reviewers see. */
+  --breakpoint-tablet: 37.5rem;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

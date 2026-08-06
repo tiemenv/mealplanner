@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -16,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Dialog,
@@ -172,25 +171,25 @@ export function CollectionEditor({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Button
+        <ButtonLink
           variant="ghost"
           size="sm"
           className="-ml-2"
-          render={<Link href="/collections/mine" />}
+          href="/collections/mine"
         >
           <ArrowLeft className="mr-2 h-4 w-4" /> My collections
-        </Button>
+        </ButtonLink>
         <div className="flex items-center gap-2">
           <Badge variant={published ? "default" : "secondary"}>
             {published ? "Published" : "Draft"}
           </Badge>
-          <Button
+          <ButtonLink
             variant="outline"
             size="sm"
-            render={<Link href={`/collections/${collection.slug}`} />}
+            href={`/collections/${collection.slug}`}
           >
             <Eye className="mr-2 h-4 w-4" /> Preview
-          </Button>
+          </ButtonLink>
         </div>
       </div>
 

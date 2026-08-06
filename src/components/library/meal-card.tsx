@@ -111,7 +111,7 @@ export function MealCard({
             href={meal.recipeUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+            className="inline-flex items-center gap-1 py-1 text-sm text-primary hover:underline touch:min-h-11 touch:py-2"
           >
             <ExternalLink className="h-3.5 w-3.5" /> Recipe link
           </a>

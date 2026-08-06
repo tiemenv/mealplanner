@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -22,7 +21,7 @@ import {
   CircleDashed,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { MealDetailDialog } from "@/components/planner/meal-detail-dialog";
@@ -210,7 +209,7 @@ export function PlannerClient({
               Target mix across the week. Locked meals are always kept.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {plan && (
               <div className="hidden items-center gap-2 sm:flex">
                 <Badge className="gap-1 bg-green-600 text-white">
@@ -274,14 +273,14 @@ export function PlannerClient({
           </p>
           {DAY_NAMES.map((dayName, dayIdx) => (
             <Card key={dayName} className="overflow-hidden p-0">
-              <div className="flex flex-col sm:flex-row">
-                <div className="flex shrink-0 items-center justify-between gap-1 border-b bg-muted/40 px-4 py-3 sm:w-44 sm:flex-col sm:items-start sm:justify-center sm:border-b-0 sm:border-r">
+              <div className="flex flex-col md:flex-row">
+                <div className="flex shrink-0 items-center justify-between gap-1 border-b bg-muted/40 px-4 py-3 md:w-44 md:flex-col md:items-start md:justify-center md:border-b-0 md:border-r">
                   <p className="font-semibold">{dayName}</p>
                   <p className="text-sm text-muted-foreground">
                     {dateForDay(weekStart, dayIdx)}
                   </p>
                 </div>
-                <div className="grid flex-1 grid-cols-1 gap-2 p-3 sm:grid-cols-3">
+                <div className="grid flex-1 grid-cols-1 gap-2 p-3 tablet:grid-cols-3">
                   {MEAL_TYPES.map((type) => {
                     const key = `${dayIdx}:${type}`;
                     const slot = slotMap.get(key);
@@ -435,7 +434,9 @@ function SlotCell({
           onClick={onLock}
           disabled={disabled}
           className={cn(
-            "rounded p-0.5 text-muted-foreground hover:text-foreground",
+            // The negative margin keeps the 44px touch target from inflating
+            // this row; it only overlaps the label's own whitespace.
+            "flex items-center justify-center rounded p-0.5 text-muted-foreground hover:text-foreground touch:-my-2 touch:size-11",
             locked && "text-primary"
           )}
           title={locked ? "Unlock" : "Lock"}
@@ -443,7 +444,7 @@ function SlotCell({
           {locked ? (
             <Lock className="h-3.5 w-3.5" />
           ) : (
-            <Unlock className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100" />
+            <Unlock className="h-3.5 w-3.5 opacity-0 group-hover:opacity-100 touch:opacity-100" />
           )}
         </button>
       </div>
@@ -480,7 +481,7 @@ function SlotCell({
               </span>
             )}
             {draggable && (
-              <GripVertical className="absolute -left-1 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+              <GripVertical className="absolute -left-1 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100" />
             )}
           </div>
           <button
@@ -534,7 +535,7 @@ function SlotCell({
         </button>
       )}
 
-      <div className="mt-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+      <div className="mt-1.5 flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 touch:gap-1 touch:opacity-100">
         <IconBtn
           title="Shuffle"
           onClick={onShuffle}
@@ -569,7 +570,7 @@ function IconBtn({
       title={title}
       onClick={onClick}
       disabled={disabled}
-      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+      className="flex items-center justify-center rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40 touch:size-11"
     >
       {children}
     </button>
@@ -586,12 +587,12 @@ function EmptyMeals() {
         or add a few of your own.
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Button render={<Link href="/collections" />}>
+        <ButtonLink href="/collections">
           <Sparkles className="mr-2 h-4 w-4" /> Browse collections
-        </Button>
-        <Button variant="outline" render={<a href="/library" />}>
+        </ButtonLink>
+        <ButtonLink variant="outline" href="/library">
           Go to library
-        </Button>
+        </ButtonLink>
       </div>
     </div>
   );

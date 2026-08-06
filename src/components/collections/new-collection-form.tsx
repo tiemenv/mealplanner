@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ArrowLeft, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   CollectionFields,
@@ -37,14 +36,14 @@ export function NewCollectionForm({ cuisines }: { cuisines: string[] }) {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <Button
+      <ButtonLink
         variant="ghost"
         size="sm"
         className="-ml-2"
-        render={<Link href="/collections/mine" />}
+        href="/collections/mine"
       >
         <ArrowLeft className="mr-2 h-4 w-4" /> My collections
-      </Button>
+      </ButtonLink>
 
       <div className="space-y-1">
         <h1 className="font-heading text-2xl font-semibold">New collection</h1>
@@ -62,14 +61,13 @@ export function NewCollectionForm({ cuisines }: { cuisines: string[] }) {
             cuisines={cuisines}
           />
           <div className="flex justify-end gap-2">
-            <Button
-              type="button"
+            <ButtonLink
               variant="outline"
               disabled={saving}
-              render={<Link href="/collections/mine" />}
+              href="/collections/mine"
             >
               Cancel
-            </Button>
+            </ButtonLink>
             <Button type="submit" disabled={saving || !details.title.trim()}>
               {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create and add meals

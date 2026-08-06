@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -14,7 +13,7 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -93,22 +92,22 @@ export function CollectionDetail({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Button
+        <ButtonLink
           variant="ghost"
           size="sm"
           className="-ml-2"
-          render={<Link href="/collections" />}
+          href="/collections"
         >
           <ArrowLeft className="mr-2 h-4 w-4" /> All collections
-        </Button>
+        </ButtonLink>
         {isOwner && (
-          <Button
+          <ButtonLink
             variant="outline"
             size="sm"
-            render={<Link href={`/collections/${collection.slug}/edit`} />}
+            href={`/collections/${collection.slug}/edit`}
           >
             <Pencil className="mr-2 h-4 w-4" /> Edit
-          </Button>
+          </ButtonLink>
         )}
       </div>
 
@@ -178,7 +177,7 @@ export function CollectionDetail({
         </div>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 tablet:grid-cols-2 lg:grid-cols-3">
         {collection.meals.map((meal) => {
           const saved = inLibrary.has(meal.key);
           const busy = adding === meal.key;

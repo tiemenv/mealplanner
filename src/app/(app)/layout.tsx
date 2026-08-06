@@ -25,11 +25,11 @@ export default function AppLayout({
         <ImpersonationBanner />
       </Suspense>
       <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-4 py-3">
-          <div className="flex items-center gap-4">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-2 px-4 py-3 sm:gap-4">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-4">
             <Link
               href="/planner"
-              className="flex items-center gap-2 font-semibold"
+              className="flex shrink-0 items-center gap-2 font-semibold"
             >
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 🍳
@@ -38,11 +38,13 @@ export default function AppLayout({
             </Link>
             <AppNav />
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             <Suspense fallback={<Skeleton className="h-5 w-20 rounded-full" />}>
               <WorkspaceBadge />
             </Suspense>
-            <UserButton />
+            <div className="shrink-0">
+              <UserButton />
+            </div>
           </div>
         </div>
       </header>
@@ -73,15 +75,17 @@ async function WorkspaceBadge() {
   return (
     <Badge
       variant={isGroup ? "default" : "secondary"}
-      className="gap-1"
+      className="min-w-0 gap-1"
       title={isGroup ? "Shared group workspace" : "Personal workspace"}
     >
       {isGroup ? (
-        <Users className="h-3 w-3" />
+        <Users className="h-3 w-3 shrink-0" />
       ) : (
-        <User className="h-3 w-3" />
+        <User className="h-3 w-3 shrink-0" />
       )}
-      {session.workspace.label}
+      {/* Group names are user-supplied, so this has to be able to give way
+          rather than push the account menu off a narrow screen. */}
+      <span className="truncate">{session.workspace.label}</span>
     </Badge>
   );
 }

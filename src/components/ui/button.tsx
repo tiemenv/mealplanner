@@ -1,3 +1,4 @@
+import Link from "next/link"
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -19,18 +20,20 @@ const buttonVariants = cva(
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
       },
+      // The `touch:` heights lift every control nearer Android's 48dp minimum
+      // touch target on finger-driven devices, while leaving desktop compact.
       size: {
         default:
-          "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        icon: "size-8",
+          "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 touch:h-11",
+        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 touch:h-9 [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 touch:h-10 [&_svg:not([class*='size-'])]:size-3.5",
+        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 touch:h-11",
+        icon: "size-8 touch:size-11",
         "icon-xs":
-          "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
+          "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg touch:size-9 [&_svg:not([class*='size-'])]:size-3",
         "icon-sm":
-          "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
-        "icon-lg": "size-9",
+          "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg touch:size-10",
+        "icon-lg": "size-9 touch:size-11",
       },
     },
     defaultVariants: {
@@ -55,4 +58,34 @@ function Button({
   )
 }
 
-export { Button, buttonVariants }
+/**
+ * A link that looks like a button.
+ *
+ * Do not route this through `ButtonPrimitive`: `render={<Link href="…" />}`
+ * renders an anchor with no `href` at all, so it looks right but can never
+ * navigate. A plain `Link` carrying the button classes keeps real link
+ * semantics — client-side navigation, middle-click, open-in-new-tab.
+ */
+function ButtonLink({
+  className,
+  variant = "default",
+  size = "default",
+  disabled,
+  ...props
+}: React.ComponentProps<typeof Link> &
+  VariantProps<typeof buttonVariants> & { disabled?: boolean }) {
+  return (
+    <Link
+      data-slot="button"
+      aria-disabled={disabled || undefined}
+      tabIndex={disabled ? -1 : undefined}
+      className={cn(
+        buttonVariants({ variant, size, className }),
+        disabled && "pointer-events-none opacity-50"
+      )}
+      {...props}
+    />
+  )
+}
+
+export { Button, ButtonLink, buttonVariants }

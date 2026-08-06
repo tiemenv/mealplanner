@@ -7,7 +7,7 @@ import { listCollections, summarize, coverFor } from "@/lib/collections";
 import { MEAL_TYPE_LABELS } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -45,12 +45,12 @@ export default async function CollectionsPage() {
         </div>
         {session.isCreator && (
           <div className="flex gap-2">
-            <Button variant="outline" render={<Link href="/collections/mine" />}>
+            <ButtonLink variant="outline" href="/collections/mine">
               <Pencil className="mr-2 h-4 w-4" /> My collections
-            </Button>
-            <Button render={<Link href="/collections/new" />}>
+            </ButtonLink>
+            <ButtonLink href="/collections/new">
               <Plus className="mr-2 h-4 w-4" /> New collection
-            </Button>
+            </ButtonLink>
           </div>
         )}
       </div>
@@ -65,9 +65,9 @@ export default async function CollectionsPage() {
               : "Check back soon — this is where published collections show up."}
           </p>
           {session.isCreator && (
-            <Button render={<Link href="/collections/new" />}>
+            <ButtonLink href="/collections/new">
               <Plus className="mr-2 h-4 w-4" /> New collection
-            </Button>
+            </ButtonLink>
           )}
         </div>
       ) : (

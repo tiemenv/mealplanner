@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Clapperboard } from "lucide-react";
 import { MealFormDialog } from "@/components/library/meal-form-dialog";
-import { Button } from "@/components/ui/button";
+import { ButtonLink } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface Props {
@@ -31,9 +30,9 @@ export function ShareImport({ url, cuisines }: Props) {
             <p className="truncate text-sm text-muted-foreground">{url}</p>
           </div>
           {!open && (
-            <Button variant="outline" render={<Link href="/library" />}>
+            <ButtonLink variant="outline" href="/library">
               Back to library
-            </Button>
+            </ButtonLink>
           )}
         </CardContent>
       </Card>
