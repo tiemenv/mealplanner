@@ -23,7 +23,12 @@ const isCreatorRoute = createRouteMatcher([
 export const proxy = clerkMiddleware(async (auth, req) => {
   if (isPublicRoute(req)) return;
 
-  await auth.protect();
+  // Land signed-out visitors on the public landing page instead of Clerk's
+  // sign-in screen. The Android build has /planner baked in as its launch URL,
+  // so without this the installed app still opens straight into sign-in.
+  await auth.protect({
+    unauthenticatedUrl: new URL("/", req.url).toString(),
+  });
 
   // Optimistic filtering only: it keeps the authoring screens out of sight,
   // while the pages and actions behind them check the role for themselves.

@@ -6,7 +6,10 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "Weekly Plate",
     description:
       "Build your meal library and auto-generate a varied, balanced weekly meal plan.",
-    start_url: "/planner",
+    // The public landing page, not /planner: a signed-out visitor opening the
+    // installed app should see what the app is, not a sign-in form. Signed-in
+    // users are redirected on to /planner from there.
+    start_url: "/",
     scope: "/",
     display: "standalone",
     background_color: "#ffffff",
