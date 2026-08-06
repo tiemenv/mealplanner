@@ -2,17 +2,15 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import { AppNav } from "@/components/app-nav";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { getSession } from "@/lib/workspace";
-import { Users, User, VenetianMask } from "lucide-react";
+import { VenetianMask } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 /**
  * The header shell renders without waiting on the session, because a layout that
- * awaits runtime data blocks navigation before any loading.tsx can show. The two
- * parts that need the session stream in behind their own boundaries.
+ * awaits runtime data blocks navigation before any loading.tsx can show. The
+ * part that needs the session streams in behind its own boundary.
  */
 export default function AppLayout({
   children,
@@ -38,13 +36,8 @@ export default function AppLayout({
             </Link>
             <AppNav />
           </div>
-          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <Suspense fallback={<Skeleton className="h-5 w-20 rounded-full" />}>
-              <WorkspaceBadge />
-            </Suspense>
-            <div className="shrink-0">
-              <UserButton />
-            </div>
+          <div className="shrink-0">
+            <UserButton />
           </div>
         </div>
       </header>
@@ -65,27 +58,5 @@ async function ImpersonationBanner() {
       Impersonation mode — you are signed in as{" "}
       {session.name || session.email}. Sensitive actions are disabled.
     </div>
-  );
-}
-
-async function WorkspaceBadge() {
-  const session = await getSession();
-  const isGroup = session.workspace.type === "group";
-
-  return (
-    <Badge
-      variant={isGroup ? "default" : "secondary"}
-      className="min-w-0 gap-1"
-      title={isGroup ? "Shared group workspace" : "Personal workspace"}
-    >
-      {isGroup ? (
-        <Users className="h-3 w-3 shrink-0" />
-      ) : (
-        <User className="h-3 w-3 shrink-0" />
-      )}
-      {/* Group names are user-supplied, so this has to be able to give way
-          rather than push the account menu off a narrow screen. */}
-      <span className="truncate">{session.workspace.label}</span>
-    </Badge>
   );
 }
