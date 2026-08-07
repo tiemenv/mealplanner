@@ -11,15 +11,21 @@ import type { MealView } from "@/lib/types";
 export function LibraryClient({
   meals,
   cuisines,
+  collectionCount,
   workspaceLabel,
 }: {
   meals: MealView[];
   cuisines: string[];
+  /** Collections this viewer could browse. Only meaningful while the library
+   *  is empty, which is the one place it is read. */
+  collectionCount: number;
   workspaceLabel: string;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<MealView | null>(null);
   const [query, setQuery] = useState("");
+
+  const hasCollections = collectionCount > 0;
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -70,18 +76,31 @@ export function LibraryClient({
           </p>
           <p className="mb-4 text-sm text-muted-foreground">
             {meals.length === 0
-              ? "Start from a ready-made collection, or add your own."
+              ? hasCollections
+                ? "Start from a ready-made collection, or add your own."
+                : "Add your first meal and the planner can build a week from it."
               : "Try a different search term."}
           </p>
-          {meals.length === 0 && (
+          {meals.length === 0 ? (
             <div className="flex flex-col gap-2 sm:flex-row">
-              <ButtonLink href="/collections">
-                <Sparkles className="mr-2 h-4 w-4" /> Browse collections
-              </ButtonLink>
-              <Button variant="outline" onClick={openAdd}>
+              {/* Collections is only worth leading with when it has something
+                  to show; otherwise it is a dead end for a new account. */}
+              {hasCollections && (
+                <ButtonLink href="/collections">
+                  <Sparkles className="mr-2 h-4 w-4" /> Browse collections
+                </ButtonLink>
+              )}
+              <Button
+                variant={hasCollections ? "outline" : "default"}
+                onClick={openAdd}
+              >
                 <Plus className="mr-2 h-4 w-4" /> Add your first meal
               </Button>
             </div>
+          ) : (
+            <Button variant="outline" onClick={() => setQuery("")}>
+              Clear search
+            </Button>
           )}
         </div>
       ) : (

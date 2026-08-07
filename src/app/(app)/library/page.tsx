@@ -2,6 +2,7 @@ import { dbConnect } from "@/lib/mongoose";
 import { Meal, type MealDoc } from "@/models/Meal";
 import { getSession } from "@/lib/workspace";
 import { serializeMeal } from "@/lib/serialize";
+import { countVisibleCollections } from "@/lib/collections";
 import { LibraryClient } from "@/components/library/library-client";
 
 export const dynamic = "force-dynamic";
@@ -24,10 +25,20 @@ export default async function LibraryPage() {
     .filter((c) => c && c.trim())
     .sort((a, b) => a.localeCompare(b));
 
+  // Only the empty state reads this, so a stocked library never pays for the
+  // query: it decides whether pointing at Collections leads anywhere.
+  const collectionCount =
+    meals.length === 0
+      ? await countVisibleCollections(
+          session.isCreator ? session.clerkId : undefined
+        )
+      : 0;
+
   return (
     <LibraryClient
       meals={meals}
       cuisines={cuisines}
+      collectionCount={collectionCount}
       workspaceLabel={session.workspace.label}
     />
   );

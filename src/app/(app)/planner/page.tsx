@@ -5,6 +5,7 @@ import { Meal, type MealDoc } from "@/models/Meal";
 import { MealPlan, type MealPlanDoc } from "@/models/MealPlan";
 import { Invite } from "@/models/Invite";
 import { serializeMeal, serializeMealPlan } from "@/lib/serialize";
+import { countVisibleCollections } from "@/lib/collections";
 import { getWeekStart } from "@/lib/week";
 import { PlannerClient } from "@/components/planner/planner-client";
 import { ButtonLink } from "@/components/ui/button";
@@ -45,6 +46,15 @@ export default async function PlannerPage({
         })
       : 0;
 
+  // Only the empty state reads this, so a stocked library never pays for the
+  // query: it decides whether pointing at Collections leads anywhere.
+  const collectionCount =
+    meals.length === 0
+      ? await countVisibleCollections(
+          session.isCreator ? session.clerkId : undefined
+        )
+      : 0;
+
   return (
     <div className="space-y-6">
       {inviteCount > 0 && (
@@ -66,6 +76,7 @@ export default async function PlannerPage({
       <PlannerClient
         meals={meals}
         initialPlan={plan}
+        collectionCount={collectionCount}
         weekStart={weekStart}
         workspaceLabel={session.workspace.label}
         householdSize={session.workspace.householdSize}

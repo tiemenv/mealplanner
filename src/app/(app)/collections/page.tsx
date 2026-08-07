@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { ChefHat, Pencil, Plus, Sparkles, UtensilsCrossed } from "lucide-react";
+import {
+  BookOpen,
+  ChefHat,
+  Pencil,
+  Plus,
+  Sparkles,
+  UtensilsCrossed,
+} from "lucide-react";
 import { dbConnect } from "@/lib/mongoose";
 import { Meal } from "@/models/Meal";
 import { getSession } from "@/lib/workspace";
@@ -62,11 +69,15 @@ export default async function CollectionsPage() {
           <p className="mb-4 max-w-sm text-sm text-muted-foreground">
             {session.isCreator
               ? "Curate the first one from the meals in your library."
-              : "Check back soon — this is where published collections show up."}
+              : "This is where published collections show up. Until then, your library is built a meal at a time."}
           </p>
-          {session.isCreator && (
+          {session.isCreator ? (
             <ButtonLink href="/collections/new">
               <Plus className="mr-2 h-4 w-4" /> New collection
+            </ButtonLink>
+          ) : (
+            <ButtonLink href="/library">
+              <BookOpen className="mr-2 h-4 w-4" /> Add meals to your library
             </ButtonLink>
           )}
         </div>

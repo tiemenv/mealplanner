@@ -98,6 +98,15 @@ function toPlain(doc: RawCollection): MealCollection {
   };
 }
 
+/** What a viewer is allowed to find on the browse page. Shared with the count
+ *  below so the two can never disagree: an empty state that sends someone to
+ *  /collections has to be sure there is something waiting there. */
+function visibleFilter(clerkId?: string) {
+  return clerkId
+    ? { $or: [{ status: "published" }, { creatorClerkId: clerkId }] }
+    : { status: "published" };
+}
+
 /** What the browse page shows: everything published, plus the viewer's own
  *  drafts so a creator can find work in progress where they left it. */
 export async function listCollections(
@@ -105,15 +114,23 @@ export async function listCollections(
 ): Promise<MealCollection[]> {
   await dbConnect();
 
-  const docs = (await Collection.find(
-    clerkId
-      ? { $or: [{ status: "published" }, { creatorClerkId: clerkId }] }
-      : { status: "published" }
-  )
+  const docs = (await Collection.find(visibleFilter(clerkId))
     .sort({ status: 1, updatedAt: -1 })
     .lean()) as unknown as RawCollection[];
 
   return docs.map(toPlain);
+}
+
+/** How many collections the browse page would have for this viewer. Counted in
+ *  the database, over the indexed `status`, so screens that only need to know
+ *  whether Collections is worth pointing at never pull the meal snapshots every
+ *  document carries. */
+export async function countVisibleCollections(
+  clerkId?: string
+): Promise<number> {
+  await dbConnect();
+
+  return Collection.countDocuments(visibleFilter(clerkId));
 }
 
 /** Every collection one creator owns, drafts included. */

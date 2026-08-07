@@ -61,12 +61,16 @@ function slotFromKey(key: string): SlotPos | null {
 export function PlannerClient({
   meals,
   initialPlan,
+  collectionCount,
   weekStart,
   workspaceLabel,
   householdSize,
 }: {
   meals: MealView[];
   initialPlan: MealPlanView | null;
+  /** Collections this viewer could browse. Only meaningful while the library
+   *  is empty, which is the one place it is read. */
+  collectionCount: number;
   weekStart: string;
   workspaceLabel: string;
   householdSize: number;
@@ -270,7 +274,7 @@ export function PlannerClient({
       </Card>
 
       {!hasMeals ? (
-        <EmptyMeals />
+        <EmptyMeals collectionCount={collectionCount} />
       ) : !plan ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
           <Sparkles className="mb-3 h-10 w-10 text-muted-foreground" />
@@ -611,21 +615,37 @@ function IconBtn({
   );
 }
 
-function EmptyMeals() {
+/** Leads with collections only while there are collections to lead with —
+ *  otherwise the first thing a new account is offered is an empty page. */
+function EmptyMeals({ collectionCount }: { collectionCount: number }) {
+  const hasCollections = collectionCount > 0;
+
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
       <CalendarRange className="mb-3 h-10 w-10 text-muted-foreground" />
       <p className="font-medium">Your library is empty</p>
       <p className="mb-4 text-sm text-muted-foreground">
-        A plan is built from your meals, so pick up a collection to start with
-        or add a few of your own.
+        {hasCollections
+          ? "A plan is built from your meals, so pick up a collection to start with or add a few of your own."
+          : "A plan is built from your meals, so add your first one to get started."}
       </p>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <ButtonLink href="/collections">
-          <Sparkles className="mr-2 h-4 w-4" /> Browse collections
-        </ButtonLink>
-        <ButtonLink variant="outline" href="/library">
-          Go to library
+        {hasCollections && (
+          <ButtonLink href="/collections">
+            <Sparkles className="mr-2 h-4 w-4" /> Browse collections
+          </ButtonLink>
+        )}
+        <ButtonLink
+          variant={hasCollections ? "outline" : "default"}
+          href="/library"
+        >
+          {hasCollections ? (
+            "Go to library"
+          ) : (
+            <>
+              <Plus className="mr-2 h-4 w-4" /> Add your first meal
+            </>
+          )}
         </ButtonLink>
       </div>
     </div>
