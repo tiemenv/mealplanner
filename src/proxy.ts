@@ -1,14 +1,24 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-const isPublicRoute = createRouteMatcher([
+/** Reachable without signing in. Exported so the guarantees Play depends on
+ *  can be asserted in tests. */
+export const PUBLIC_ROUTES = [
   "/",
   "/privacy",
+  // Google Play requires the account-deletion page to be reachable without
+  // signing in or installing the app.
+  "/delete-account",
   "/sign-in(.*)",
   "/sign-up(.*)",
+  // Clerk calls this from its own servers, with a signature instead of a
+  // session. The handler verifies that signature itself.
+  "/api/webhooks/clerk",
   // Android TWA / Digital Asset Links — must be reachable without auth.
   "/.well-known/assetlinks.json",
-]);
+];
+
+const isPublicRoute = createRouteMatcher(PUBLIC_ROUTES);
 
 /** Collection authoring. Everything else under /collections is public to any
  *  signed-in user. */

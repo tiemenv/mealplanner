@@ -75,12 +75,20 @@ export default async function Home() {
       </section>
 
       <footer className="border-t px-6 py-6 text-center text-sm text-muted-foreground">
-        <Link
-          href="/privacy"
-          className="hover:text-foreground underline underline-offset-4"
-        >
-          Privacy Policy
-        </Link>
+        <div className="flex items-center justify-center gap-4">
+          <Link
+            href="/privacy"
+            className="hover:text-foreground underline underline-offset-4"
+          >
+            Privacy Policy
+          </Link>
+          <Link
+            href="/delete-account"
+            className="hover:text-foreground underline underline-offset-4"
+          >
+            Delete your account
+          </Link>
+        </div>
       </footer>
     </main>
   );

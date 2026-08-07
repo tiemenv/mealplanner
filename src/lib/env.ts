@@ -23,6 +23,10 @@ const EnvSchema = z.object({
     .string()
     .min(1, "not set — Clerk dashboard → API Keys"),
   CLERK_SECRET_KEY: z.string().min(1, "not set — Clerk dashboard → API Keys"),
+  // Optional so the app still boots without it, but the deletion webhook
+  // refuses every payload until it is set rather than trusting an unverified
+  // one. Each Clerk instance signs with its own secret.
+  CLERK_WEBHOOK_SIGNING_SECRET: z.string().optional(),
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
   UNSPLASH_ACCESS_KEY: z.string().optional(),
   SPOONACULAR_API_KEY: z.string().optional(),
@@ -36,6 +40,9 @@ function load() {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
       process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "",
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY ?? "",
+    CLERK_WEBHOOK_SIGNING_SECRET: optional(
+      process.env.CLERK_WEBHOOK_SIGNING_SECRET
+    ),
     BLOB_READ_WRITE_TOKEN: optional(process.env.BLOB_READ_WRITE_TOKEN),
     UNSPLASH_ACCESS_KEY: optional(process.env.UNSPLASH_ACCESS_KEY),
     SPOONACULAR_API_KEY: optional(process.env.SPOONACULAR_API_KEY),

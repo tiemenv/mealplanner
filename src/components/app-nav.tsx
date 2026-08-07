@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { BookOpen, CalendarDays, Sparkles, Users } from "lucide-react";
+import { BookOpen, CalendarDays, Sparkles, UserCog, Users } from "lucide-react";
 
 const links = [
   { href: "/planner", label: "Planner", icon: CalendarDays },
   { href: "/library", label: "Library", icon: BookOpen },
   { href: "/collections", label: "Collections", icon: Sparkles },
   { href: "/group", label: "Group", icon: Users },
+  { href: "/account", label: "Account", icon: UserCog },
 ];
 
 export function AppNav() {
