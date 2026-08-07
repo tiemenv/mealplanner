@@ -27,6 +27,7 @@ import { Slider } from "@/components/ui/slider";
 import { MealDetailDialog } from "@/components/planner/meal-detail-dialog";
 import { MealPickerDialog } from "@/components/planner/meal-picker-dialog";
 import { ShoppingListDialog } from "@/components/planner/shopping-list-dialog";
+import { useSlotDrag } from "@/components/planner/use-slot-drag";
 import { MEAL_TYPES, MEAL_TYPE_LABELS, type MealType } from "@/lib/constants";
 import { DAY_NAMES, formatWeekRange, dateForDay, shiftWeek, getWeekStart } from "@/lib/week";
 import type { MealPlanView, MealView, SlotView } from "@/lib/types";
@@ -44,6 +45,17 @@ import {
 interface SlotPos {
   day: number;
   mealType: MealType;
+}
+
+function slotKey(day: number, mealType: MealType) {
+  return `${day}:${mealType}`;
+}
+
+function slotFromKey(key: string): SlotPos | null {
+  const [day, mealType] = key.split(":");
+  const dayIndex = Number(day);
+  if (!Number.isInteger(dayIndex)) return null;
+  return { day: dayIndex, mealType: mealType as MealType };
 }
 
 export function PlannerClient({
@@ -65,9 +77,8 @@ export function PlannerClient({
   const [pending, startTransition] = useTransition();
   const [viewMeal, setViewMeal] = useState<MealView | null>(null);
   const [pickerSlot, setPickerSlot] = useState<SlotPos | null>(null);
-  const [dragSource, setDragSource] = useState<SlotPos | null>(null);
-  const [dragOver, setDragOver] = useState<string | null>(null);
   const [shoppingOpen, setShoppingOpen] = useState(false);
+  const { drag, begin: beginDrag } = useSlotDrag<SlotPos>(handleDrop);
 
   const mealById = useMemo(
     () => new Map(meals.map((m) => [m.id, m])),
@@ -103,6 +114,13 @@ export function PlannerClient({
     });
     return arr;
   }, [plan, mealById]);
+
+  const draggedSlot = drag
+    ? slotMap.get(slotKey(drag.source.day, drag.source.mealType))
+    : null;
+  const draggedMeal = draggedSlot?.mealId
+    ? mealById.get(draggedSlot.mealId) ?? null
+    : null;
 
   function goWeek(offset: number) {
     router.push(`/planner?week=${shiftWeek(weekStart, offset)}`);
@@ -142,14 +160,11 @@ export function PlannerClient({
     runSlotAction(setSlotWildcard(weekStart, slot.day, slot.mealType));
   }
 
-  function handleDrop(target: SlotPos) {
-    const source = dragSource;
-    setDragSource(null);
-    setDragOver(null);
-    if (!source) return;
+  function handleDrop(source: SlotPos, targetKey: string) {
+    const target = slotFromKey(targetKey);
+    if (!target) return;
     if (source.day === target.day && source.mealType === target.mealType) return;
-    const targetSlot = slotMap.get(`${target.day}:${target.mealType}`);
-    if (targetSlot?.locked) {
+    if (slotMap.get(targetKey)?.locked) {
       toast.error("That slot is locked.");
       return;
     }
@@ -267,9 +282,9 @@ export function PlannerClient({
       ) : (
         <div className="space-y-3">
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <GripVertical className="h-3.5 w-3.5" />
-            Drag a meal onto another slot to move or swap it. Click an empty slot
-            to pick one from your library. Lock a slot to keep it.
+            <GripVertical className="h-3.5 w-3.5 shrink-0" />
+            Drag a meal by its handle onto another slot to move or swap it. Tap
+            an empty slot to pick one from your library. Lock a slot to keep it.
           </p>
           {DAY_NAMES.map((dayName, dayIdx) => (
             <Card key={dayName} className="overflow-hidden p-0">
@@ -282,24 +297,28 @@ export function PlannerClient({
                 </div>
                 <div className="grid flex-1 grid-cols-1 gap-2 p-3 tablet:grid-cols-3">
                   {MEAL_TYPES.map((type) => {
-                    const key = `${dayIdx}:${type}`;
+                    const key = slotKey(dayIdx, type);
                     const slot = slotMap.get(key);
                     const meal = slot?.mealId
                       ? mealById.get(slot.mealId)
                       : null;
+                    const isSource =
+                      drag?.source.day === dayIdx &&
+                      drag?.source.mealType === type;
                     return (
                       <SlotCell
                         key={type}
+                        slotKey={key}
                         mealType={type}
                         meal={meal ?? null}
                         locked={!!slot?.locked}
                         wildcard={!!slot?.wildcard}
                         disabled={pending}
-                        isDragging={
-                          dragSource?.day === dayIdx &&
-                          dragSource?.mealType === type
+                        isDragging={isSource}
+                        isDropTarget={drag?.overKey === key && !isSource}
+                        onDragHandleDown={(e) =>
+                          beginDrag({ day: dayIdx, mealType: type }, e)
                         }
-                        isDropTarget={dragOver === key && dragSource !== null}
                         onLock={() =>
                           runSlotAction(toggleSlotLock(weekStart, dayIdx, type))
                         }
@@ -314,17 +333,6 @@ export function PlannerClient({
                         onView={() => meal && setViewMeal(meal)}
                         onPick={() =>
                           setPickerSlot({ day: dayIdx, mealType: type })
-                        }
-                        onDragStart={() =>
-                          setDragSource({ day: dayIdx, mealType: type })
-                        }
-                        onDragEnd={() => {
-                          setDragSource(null);
-                          setDragOver(null);
-                        }}
-                        onDragEnterSlot={() => setDragOver(key)}
-                        onDropSlot={() =>
-                          handleDrop({ day: dayIdx, mealType: type })
                         }
                       />
                     );
@@ -362,11 +370,57 @@ export function PlannerClient({
         plannedMeals={plannedMeals}
         householdSize={householdSize}
       />
+
+      {draggedMeal && drag && (
+        <DragPreview meal={draggedMeal} x={drag.x} y={drag.y} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Follows the pointer during a drag. It sits above the finger rather than under
+ * it, since on a phone the hand covers whatever it is holding, and it must stay
+ * transparent to hit testing so the slot underneath can be found.
+ */
+function DragPreview({
+  meal,
+  x,
+  y,
+}: {
+  meal: MealView;
+  x: number;
+  y: number;
+}) {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none fixed z-50 flex max-w-52 items-center gap-2 rounded-md border bg-background/95 px-2 py-1.5 shadow-lg"
+      style={{
+        left: x,
+        top: y,
+        transform: "translate(-50%, calc(-100% - 12px))",
+      }}
+    >
+      {meal.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={meal.imageUrl}
+          alt=""
+          className="h-8 w-8 shrink-0 rounded object-cover"
+        />
+      ) : (
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-muted text-sm">
+          🍽
+        </span>
+      )}
+      <p className="truncate text-sm font-medium">{meal.name}</p>
     </div>
   );
 }
 
 function SlotCell({
+  slotKey,
   mealType,
   meal,
   locked,
@@ -379,11 +433,9 @@ function SlotCell({
   onClear,
   onView,
   onPick,
-  onDragStart,
-  onDragEnd,
-  onDragEnterSlot,
-  onDropSlot,
+  onDragHandleDown,
 }: {
+  slotKey: string;
   mealType: MealType;
   meal: MealView | null;
   locked: boolean;
@@ -396,26 +448,13 @@ function SlotCell({
   onClear: () => void;
   onView: () => void;
   onPick: () => void;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onDragEnterSlot: () => void;
-  onDropSlot: () => void;
+  onDragHandleDown: (event: React.PointerEvent) => void;
 }) {
   const draggable = !!meal && !locked && !disabled;
 
   return (
     <div
-      onDragOver={(e) => {
-        if (!locked) e.preventDefault();
-      }}
-      onDragEnter={(e) => {
-        e.preventDefault();
-        onDragEnterSlot();
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        onDropSlot();
-      }}
+      data-slot-key={slotKey}
       className={cn(
         "group rounded-md border p-2 transition-colors",
         locked && "border-primary/50 bg-primary/5",
@@ -450,24 +489,22 @@ function SlotCell({
       </div>
 
       {meal ? (
-        <div
-          draggable={draggable}
-          onDragStart={(e) => {
-            if (!draggable) {
-              e.preventDefault();
-              return;
-            }
-            e.dataTransfer.effectAllowed = "move";
-            e.dataTransfer.setData("text/plain", meal.id);
-            onDragStart();
-          }}
-          onDragEnd={onDragEnd}
-          className={cn(
-            "flex items-start gap-2 rounded",
-            draggable && "cursor-grab active:cursor-grabbing"
+        <div className="flex items-start gap-2 rounded">
+          {draggable && (
+            <button
+              type="button"
+              aria-label={`Move ${meal.name}`}
+              title="Drag to move or swap"
+              onPointerDown={onDragHandleDown}
+              // `touch-none` hands the gesture to the pointer handlers instead
+              // of the scroller. It is scoped to the handle so that swiping
+              // anywhere else on the slot still scrolls the week.
+              className="flex size-5 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing touch:size-11 touch:opacity-100"
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
           )}
-        >
-          <div className="relative shrink-0">
+          <div className="shrink-0">
             {meal.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -479,9 +516,6 @@ function SlotCell({
               <span className="flex h-11 w-11 items-center justify-center rounded bg-muted text-sm">
                 🍽
               </span>
-            )}
-            {draggable && (
-              <GripVertical className="absolute -left-1 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 touch:opacity-100" />
             )}
           </div>
           <button
