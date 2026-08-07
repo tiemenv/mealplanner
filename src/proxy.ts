@@ -1,21 +1,14 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-/** Reachable without signing in. Exported so the guarantees Play depends on
- *  can be asserted in tests. */
-export const PUBLIC_ROUTES = [
+const isPublicRoute = createRouteMatcher([
   "/",
   "/privacy",
-  // Google Play requires the account-deletion page to be reachable without
-  // signing in or installing the app.
-  "/delete-account",
   "/sign-in(.*)",
   "/sign-up(.*)",
   // Android TWA / Digital Asset Links — must be reachable without auth.
   "/.well-known/assetlinks.json",
-];
-
-const isPublicRoute = createRouteMatcher(PUBLIC_ROUTES);
+]);
 
 /** Collection authoring. Everything else under /collections is public to any
  *  signed-in user. */

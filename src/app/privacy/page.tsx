@@ -165,10 +165,9 @@ export default function PrivacyPage() {
           <Section title="Data retention">
             <p>
               We keep your account and app data while your account is active.
-              Deleting your account removes that data immediately, except where
-              we must retain information for legal or security reasons, and
-              except for encrypted backups, which age out within 30 days and are
-              never restored into the live service.
+              If you delete your account, we will delete or anonymise associated
+              personal data within a reasonable period, except where we must
+              retain information for legal, security, or backup purposes.
             </p>
           </Section>
 
@@ -188,41 +187,18 @@ export default function PrivacyPage() {
               the Group page.
             </p>
             <p className="mt-3">
-              You can delete your account yourself from the{" "}
-              <Link
-                href="/account"
-                className="font-medium text-foreground underline underline-offset-4 hover:text-foreground/80"
-              >
-                Account page
-              </Link>{" "}
-              in the app. It takes effect immediately and permanently removes
-              your sign-in account, your personal meal library and plans, meal
-              photos you uploaded, your group membership, invitations addressed
-              to you, and any collections you published. It cannot be undone.
-            </p>
-            <p className="mt-3">
-              If you can no longer sign in, email{" "}
+              To request account deletion and removal of associated personal
+              data, email{" "}
               <a
                 href={`mailto:${SUPPORT_EMAIL}?subject=Account%20deletion%20request`}
                 className="font-medium text-foreground underline underline-offset-4 hover:text-foreground/80"
               >
                 {SUPPORT_EMAIL}
               </a>{" "}
-              from the address linked to your account and we will delete it for
-              you. We may ask you to verify ownership first.
-            </p>
-            <p className="mt-3">
-              Meals and plans in a shared group library stay with the members
-              who remain, and meals other people imported stay in their own
-              libraries. Our{" "}
-              <Link
-                href="/delete-account"
-                className="font-medium text-foreground underline underline-offset-4 hover:text-foreground/80"
-              >
-                account deletion page
-              </Link>{" "}
-              sets out exactly what is deleted, what is kept, and how long it
-              takes.
+              from the email address linked to your account. We may ask you to
+              verify ownership before processing the request. Account deletion
+              is permanent and removes your personal library, plans, and group
+              membership.
             </p>
           </Section>
 
