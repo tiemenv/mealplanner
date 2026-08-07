@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "tsx scripts/seed-meals.ts"
+    "seed": "tsx scripts/seed-meals.ts",
+    "publish:starter": "tsx scripts/publish-starter-collection.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.6",

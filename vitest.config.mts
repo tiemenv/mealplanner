@@ -6,6 +6,6 @@ export default defineConfig({
   test: {
     // The suite covers pure planning logic, so there is no DOM to emulate.
     environment: "node",
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "scripts/**/*.test.ts"],
   },
 });
