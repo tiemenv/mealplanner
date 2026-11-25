@@ -28,16 +28,29 @@ const isCreatorRoute = createRouteMatcher([
   "/collections/(.*)/edit",
 ]);
 
+/** Where a signed-out visitor is sent. Exported for tests.
+ *
+ *  Usually the public landing page: the Android build has /planner baked in as
+ *  its launch URL, so without this the installed app opens straight into
+ *  sign-in. A share from another app is the exception: the landing page would
+ *  drop the shared link, so it goes to sign-in and comes back to /import with
+ *  the link still in the query string. */
+export function unauthenticatedUrlFor(url: URL): string {
+  if (url.pathname === "/import" && url.search) {
+    const signIn = new URL("/sign-in", url);
+    signIn.searchParams.set("redirect_url", url.toString());
+    return signIn.toString();
+  }
+  return new URL("/", url).toString();
+}
+
 // Named "proxy" because Next 16 deprecated the middleware file convention.
 // Clerk looks for either name, so clerkMiddleware is still the handler.
 export const proxy = clerkMiddleware(async (auth, req) => {
   if (isPublicRoute(req)) return;
 
-  // Land signed-out visitors on the public landing page instead of Clerk's
-  // sign-in screen. The Android build has /planner baked in as its launch URL,
-  // so without this the installed app still opens straight into sign-in.
   await auth.protect({
-    unauthenticatedUrl: new URL("/", req.url).toString(),
+    unauthenticatedUrl: unauthenticatedUrlFor(req.nextUrl),
   });
 
   // Optimistic filtering only: it keeps the authoring screens out of sight,
