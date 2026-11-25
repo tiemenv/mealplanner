@@ -2,7 +2,27 @@ import { describe, expect, it } from "vitest";
 import { createRouteMatcher } from "@clerk/nextjs/server";
 import { NextRequest } from "next/server";
 
-import { PUBLIC_ROUTES } from "@/proxy";
+import { PUBLIC_ROUTES, unauthenticatedUrlFor } from "@/proxy";
+
+describe("signed-out redirects", () => {
+  const at = (path: string) =>
+    new URL(unauthenticatedUrlFor(new URL(path, "https://theweeklyplate.app")));
+
+  it("sends a signed-out share through sign-in and back with the link intact", () => {
+    const shared =
+      "/import?title=Pasta&text=Look+https%3A%2F%2Fwww.instagram.com%2Freel%2Fabc%2F";
+    const target = at(shared);
+    expect(target.pathname).toBe("/sign-in");
+    expect(target.searchParams.get("redirect_url")).toBe(
+      `https://theweeklyplate.app${shared}`
+    );
+  });
+
+  it("still lands everything else on the landing page", () => {
+    expect(at("/planner").pathname).toBe("/");
+    expect(at("/import").pathname).toBe("/");
+  });
+});
 
 const isPublic = createRouteMatcher(PUBLIC_ROUTES);
 
